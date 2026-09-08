@@ -17,7 +17,11 @@ import '../../features/player/presentation/full_player_page.dart';
 import '../../features/player/presentation/lyric_page.dart';
 import '../constants/app_routes.dart';
 
+/// 根导航器 key：供原生侧（灵动岛/通知栏点击）在没有 BuildContext 时打开页面。
+final rootNavigatorKey = GlobalKey<NavigatorState>();
+
 final appRouter = GoRouter(
+  navigatorKey: rootNavigatorKey,
   initialLocation: AppRoutes.discover,
   routes: [
     StatefulShellRoute.indexedStack(

@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'qq_login_service.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../platform/js_engine_service.dart';
@@ -12,6 +14,14 @@ import '../../settings/domain/models/plugin_info.dart';
 
 class PluginService {
   static const String _prefsKey = 'installed_plugins';
+
+  /// 内置音源脚本（随安装包发布，开箱即用，无需用户手动导入插件）。
+  ///
+  /// key 为宿主 id，value 为 asset 路径。内置宿主始终加载，用户自己导入的
+  /// 插件排在前面、优先解析（见 initializePlugins 的加载顺序）。
+  static const Map<String, String> _builtInSourceAssets = {
+    'builtin_imusic_qq': 'assets/sources/imusic_qq_source.js',
+  };
   final Map<String, PluginHost> _loadedPlugins = {};
   final Map<String, JsEngineService> _engines = {};
 
@@ -418,7 +428,72 @@ class PluginService {
       }
     }
 
+    // 内置音源最后加载：用户自己导入的插件在解析顺序上优先，
+    // 插件解析失败时会自动回退到内置音源（见 MusicSourceManager）。
+    await _loadBuiltInSources();
+
     print('[PluginService] 插件初始化完成，已加载 ${_loadedPlugins.length} 个插件');
+  }
+
+  /// 加载随包发布的内置音源脚本（洛雪/LX 格式，复用同一套 JS 运行时）。
+  Future<void> _loadBuiltInSources() async {
+    for (final entry in _builtInSourceAssets.entries) {
+      final pluginId = entry.key;
+      if (_loadedPlugins.containsKey(pluginId)) continue;
+      try {
+        var code = await rootBundle.loadString(entry.value);
+        if (code.trim().isEmpty) continue;
+        // 登录态注入：把 QQ 登录 cookie 写进内置源脚本的 COOKIE 变量。
+        // 未登录时 cookie 为空，脚本维持匿名行为（听歌不受影响）。
+        code = await _injectQqCookie(code);
+
+        final engine = JsEngineService();
+        await engine.init();
+        final host = PluginHost(engine);
+        try {
+          final converted = LxPluginConverter().convert(code);
+          await host.loadPlugin(converted, originalPluginCode: code);
+          _loadedPlugins[pluginId] = host;
+          _engines[pluginId] = engine;
+          print(
+            '[PluginService] 内置音源已加载: ${host.pluginInfo?.name} '
+            '(${host.sources.map((s) => s.name).join(", ")})',
+          );
+        } catch (e) {
+          engine.dispose();
+          rethrow;
+        }
+      } catch (e) {
+        print('[PluginService] 内置音源加载失败 ${entry.value}: $e');
+      }
+    }
+  }
+
+  /// 把 QQ 登录 cookie 注入脚本的 `var COOKIE = ''`（未登录则原样返回）
+  Future<String> _injectQqCookie(String code) async {
+    try {
+      final login = await QqLoginService.instance.load();
+      if (login == null) return code;
+      final cookie = login.cookie.replaceAll("'", "\\'");
+      return code.replaceFirst(
+        RegExp(r"var\s+COOKIE\s*=\s*''"),
+        "var COOKIE = '$cookie'",
+      );
+    } catch (_) {
+      return code;
+    }
+  }
+
+  /// 登录/登出后重新加载内置音源，让新的 COOKIE 生效
+  Future<void> reloadBuiltInSources() async {
+    for (final id in _builtInSourceAssets.keys) {
+      final engine = _engines.remove(id);
+      _loadedPlugins.remove(id);
+      try {
+        engine?.dispose();
+      } catch (_) {}
+    }
+    await _loadBuiltInSources();
   }
 
   PluginHost? getPluginById(String pluginId) {

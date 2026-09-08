@@ -216,7 +216,8 @@ enum FullScreenBackgroundMode { theme, cover, dark }
 
 final fullScreenBackgroundModeProvider =
     StateProvider<FullScreenBackgroundMode>(
-      (ref) => FullScreenBackgroundMode.theme,
+      // 默认与 iMusic 同款：封面重度模糊背景
+      (ref) => FullScreenBackgroundMode.cover,
     );
 
 // -- app version (loaded once) --
@@ -356,7 +357,7 @@ final settingsInitProvider = FutureProvider<void>((ref) async {
       .read(fullScreenBackgroundModeProvider.notifier)
       .state = FullScreenBackgroundMode.values.firstWhere(
     (e) => e.name == bgMode,
-    orElse: () => FullScreenBackgroundMode.theme,
+    orElse: () => FullScreenBackgroundMode.cover,
   );
 });
 

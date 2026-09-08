@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Mint Music 自定义媒体通知栏（iMusic 同款 RemoteViews 布局） -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@color/notif_bg"
+    android:padding="12dp">
+
+    <!-- 顶行：封面 + 歌曲信息 + 关闭按钮 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <ImageView
+            android:id="@+id/n_cover"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:scaleType="centerCrop"
+            android:src="@mipmap/logo"
+            android:contentDescription="封面"/>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="12dp"
+            android:layout_marginEnd="8dp"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/n_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:singleLine="true"
+                android:ellipsize="end"
+                android:textColor="@color/notif_primary"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:text="Mint Music"/>
+
+            <TextView
+                android:id="@+id/n_artist"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:singleLine="true"
+                android:ellipsize="end"
+                android:textColor="@color/notif_secondary"
+                android:textSize="12sp"
+                android:layout_marginTop="2dp"/>
+        </LinearLayout>
+
+        <ImageButton
+            android:id="@+id/n_close"
+            android:layout_width="36dp"
+            android:layout_height="40dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_close_clear_cancel"
+            android:tint="@color/notif_icon_dim"
+            android:contentDescription="关闭"/>
+    </LinearLayout>
+
+    <!-- 底行：控制按钮（等宽 7 列） -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="6dp">
+
+        <!-- 收藏 -->
+        <ImageButton
+            android:id="@+id/n_fav"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/n_heart"
+            android:tint="@color/notif_icon"
+            android:contentDescription="收藏"/>
+
+        <!-- 桌面歌词锁定（iMusic 同款：开锁=可拖动，关锁=触摸穿透打游戏不误触） -->
+        <ImageButton
+            android:id="@+id/n_lock"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/n_lock_open"
+            android:tint="@color/notif_icon"
+            android:contentDescription="桌面歌词锁定"/>
+
+        <!-- 上一首 -->
+        <ImageButton
+            android:id="@+id/n_prev"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/n_prev"
+            android:tint="@color/notif_icon"
+            android:contentDescription="上一首"/>
+
+        <!-- 播放/暂停 -->
+        <ImageButton
+            android:id="@+id/n_toggle"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/n_pause"
+            android:tint="@color/notif_icon"
+            android:contentDescription="播放暂停"/>
+
+        <!-- 下一首 -->
+        <ImageButton
+            android:id="@+id/n_next"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/n_next"
+            android:tint="@color/notif_icon"
+            android:contentDescription="下一首"/>
+
+        <!-- 桌面歌词 -->
+        <TextView
+            android:id="@+id/n_lyric"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="词"
+            android:textColor="@color/notif_primary"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="桌面歌词"/>
+
+        <!-- 灵动岛 -->
+        <TextView
+            android:id="@+id/n_island"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="岛"
+            android:textColor="@color/notif_primary"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="灵动岛"/>
+    </LinearLayout>
+</LinearLayout>

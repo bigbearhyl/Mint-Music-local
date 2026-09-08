@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 通知栏主文字色 (黑色) -->
+    <color name="notif_primary">#FF1A1A1A</color>
+    <!-- 通知栏次要文字色 -->
+    <color name="notif_secondary">#FF666666</color>
+    <!-- 通知栏图标色 (黑色) -->
+    <color name="notif_icon">#FF1A1A1A</color>
+    <color name="notif_icon_dim">#FF1A1A1A</color>
+    <!-- 状态按钮开启色 (词/岛, 绿色) -->
+    <color name="notif_state_on">#FF31C27C</color>
+    <!-- 收藏开启色 (红色, iMusic 同款) -->
+    <color name="notif_fav_on">#FFFF4060</color>
+    <!-- 通知栏浅色背景 -->
+    <color name="notif_bg">#FFF5F5F5</color>
+</resources>

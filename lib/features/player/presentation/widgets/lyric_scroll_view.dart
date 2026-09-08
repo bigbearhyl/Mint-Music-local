@@ -788,18 +788,39 @@ class _LyricLineWidget extends StatelessWidget {
     final resolvedFontFamily = _resolveFontFamily();
     final resolvedFontWeight = _resolveFontWeight();
     if (!useWordLevel) {
-      return Text(
-        line.plainText,
+      if (!isActive) {
+        return Text(
+          line.plainText,
+          textAlign: centerAlign ? TextAlign.center : TextAlign.start,
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontFamily: resolvedFontFamily,
+            fontSize: mainFontSize,
+            height: 1.32,
+            fontWeight: resolvedFontWeight,
+            letterSpacing: -0.25,
+            color: inactiveColor,
+          ),
+        );
+      }
+      // 当前行卡拉OK：整句白色，唱到的部分从左到右变绿
+      return _KaraokeGradientText(
+        line: line,
+        clock: clock,
+        staticTimeMs: staticTimeMs,
+        isPlaying: isPlaying,
+        text: line.plainText,
+        karaokeColor: const Color(0xFF31C27C),
         textAlign: centerAlign ? TextAlign.center : TextAlign.start,
         maxLines: 3,
-        overflow: TextOverflow.ellipsis,
         style: TextStyle(
           fontFamily: resolvedFontFamily,
           fontSize: mainFontSize,
           height: 1.32,
           fontWeight: resolvedFontWeight,
           letterSpacing: -0.25,
-          color: isActive ? activeColor : inactiveColor,
+          color: activeColor,
         ),
       );
     }
@@ -810,11 +831,105 @@ class _LyricLineWidget extends StatelessWidget {
       staticTimeMs: staticTimeMs,
       activeColor: activeColor,
       inactiveColor: inactiveColor,
+      karaokeColor: const Color(0xFF31C27C),
       fontSize: mainFontSize,
       isActive: isActive,
       centerAlign: centerAlign,
       fontFamily: resolvedFontFamily,
       fontWeight: resolvedFontWeight,
+    );
+  }
+}
+
+/// 非逐字（纯 LRC）当前行：按行内时间进度从左到右绿色扫色。
+class _KaraokeGradientText extends StatefulWidget {
+  final LyricLine line;
+  final _LyricClock? clock;
+  final int staticTimeMs;
+  final bool isPlaying;
+  final String text;
+  final Color karaokeColor;
+  final TextAlign textAlign;
+  final int maxLines;
+  final TextStyle style;
+
+  const _KaraokeGradientText({
+    required this.line,
+    required this.clock,
+    required this.staticTimeMs,
+    required this.isPlaying,
+    required this.text,
+    required this.karaokeColor,
+    required this.textAlign,
+    required this.maxLines,
+    required this.style,
+  });
+
+  @override
+  State<_KaraokeGradientText> createState() => _KaraokeGradientTextState();
+}
+
+class _KaraokeGradientTextState extends State<_KaraokeGradientText>
+    with SingleTickerProviderStateMixin {
+  late final Ticker _ticker = createTicker((_) {
+    if (mounted) setState(() {});
+  });
+
+  @override
+  void initState() {
+    super.initState();
+    _syncTicker();
+  }
+
+  @override
+  void didUpdateWidget(covariant _KaraokeGradientText oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncTicker();
+  }
+
+  void _syncTicker() {
+    final shouldRun = widget.isPlaying && widget.clock != null;
+    if (shouldRun && !_ticker.isActive) {
+      _ticker.start();
+    } else if (!shouldRun && _ticker.isActive) {
+      _ticker.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _ticker.dispose();
+    super.dispose();
+  }
+
+  double get _progress {
+    final t = widget.clock?.timeMs ?? widget.staticTimeMs;
+    final duration = (widget.line.endTimeMs - widget.line.startTimeMs)
+        .clamp(1, 1 << 30);
+    return ((t - widget.line.startTimeMs) / duration).clamp(0.0, 1.0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = _progress;
+    return ShaderMask(
+      blendMode: BlendMode.srcIn,
+      shaderCallback: (bounds) => LinearGradient(
+        colors: [
+          widget.karaokeColor,
+          widget.karaokeColor,
+          Colors.white,
+          Colors.white,
+        ],
+        stops: [0, p, p, 1],
+      ).createShader(bounds),
+      child: Text(
+        widget.text,
+        textAlign: widget.textAlign,
+        maxLines: widget.maxLines,
+        overflow: TextOverflow.ellipsis,
+        style: widget.style,
+      ),
     );
   }
 }
@@ -825,6 +940,7 @@ class _PaintedYrcLine extends StatelessWidget {
   final int staticTimeMs;
   final Color activeColor;
   final Color inactiveColor;
+  final Color karaokeColor;
   final double fontSize;
   final bool isActive;
   final bool centerAlign;
@@ -837,6 +953,7 @@ class _PaintedYrcLine extends StatelessWidget {
     required this.staticTimeMs,
     required this.activeColor,
     required this.inactiveColor,
+    required this.karaokeColor,
     required this.fontSize,
     required this.isActive,
     required this.centerAlign,
@@ -857,6 +974,7 @@ class _PaintedYrcLine extends StatelessWidget {
           fontSize: fontSize,
           activeColor: activeColor,
           inactiveColor: inactiveColor,
+          karaokeColor: karaokeColor,
           isActive: isActive,
           centerAlign: centerAlign,
           fontFamily: fontFamily,
@@ -1031,6 +1149,7 @@ class _YrcLineLayout {
     required double fontSize,
     required Color activeColor,
     required Color inactiveColor,
+    required Color karaokeColor,
     required bool isActive,
     required bool centerAlign,
     required String? fontFamily,
@@ -1049,6 +1168,7 @@ class _YrcLineLayout {
       (fontSize * 100).round(),
       activeColor.toARGB32(),
       inactiveColor.toARGB32(),
+      karaokeColor.toARGB32(),
       isActive,
       centerAlign,
       fontFamily ?? '',
@@ -1063,6 +1183,7 @@ class _YrcLineLayout {
       fontSize: fontSize,
       activeColor: activeColor,
       inactiveColor: inactiveColor,
+      karaokeColor: karaokeColor,
       isActive: isActive,
       centerAlign: centerAlign,
       fontFamily: fontFamily,
@@ -1081,6 +1202,7 @@ class _YrcLineLayout {
     required double fontSize,
     required Color activeColor,
     required Color inactiveColor,
+    required Color karaokeColor,
     required bool isActive,
     required bool centerAlign,
     required String? fontFamily,
@@ -1093,10 +1215,13 @@ class _YrcLineLayout {
       fontWeight: fontWeight,
       letterSpacing: -0.25,
     );
+    // 卡拉OK配色：当前行整句白色，已唱/正在唱的字为绿色
     final dimColor = isActive
-        ? activeColor.withValues(alpha: 0.3)
+        ? activeColor
         : inactiveColor.withValues(alpha: 0.85);
-    final finishedColor = activeColor.withValues(alpha: isActive ? 1 : 0.5);
+    final finishedColor = isActive
+        ? karaokeColor
+        : activeColor.withValues(alpha: 0.5);
 
     final spaceFull = _spacePainter(textStyle).width;
 
@@ -1113,7 +1238,7 @@ class _YrcLineLayout {
         _WordPaintData(
           source: source,
           dimPainter: _buildPainter(displayText, textStyle, dimColor),
-          brightPainter: _buildPainter(displayText, textStyle, activeColor),
+          brightPainter: _buildPainter(displayText, textStyle, karaokeColor),
           finishedPainter: _buildPainter(displayText, textStyle, finishedColor),
           activeColor: activeColor,
         ),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app/app.dart';
 import 'core/services/audio_service_init.dart';
+import 'features/player/platform/island_controller.dart';
 import 'features/settings/application/settings_providers.dart';
 import 'shared/services/amll_toggle_service.dart';
 import 'features/player/presentation/widgets/amll_lyric_player.dart';
@@ -54,6 +55,9 @@ void main() async {
     // 预热字体缓存：在后台完成 base64 编码，避免首次打开歌词页时阻塞 UI
     unawaited(AmllLyricPlayerState.prewarmFonts('lyricfont'));
   }
+
+  // 启动灵动岛歌词桥接
+  container.read(islandControllerProvider);
 
   print('>>> main: 启动应用...');
   runApp(UncontrolledProviderScope(container: container, child: const App()));

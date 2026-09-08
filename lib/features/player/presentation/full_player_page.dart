@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -20,6 +22,8 @@ import 'widgets/lyric_scroll_view.dart';
 import 'widgets/amll_lyric_player.dart';
 import 'widgets/player_controls.dart';
 import '../platform/audio_effect_service.dart';
+import '../platform/audio_handler.dart';
+import '../platform/island_controller.dart';
 
 class FullPlayerPage extends ConsumerStatefulWidget {
   const FullPlayerPage({super.key});
@@ -588,58 +592,140 @@ class _PlayerHeader extends ConsumerWidget {
   }
 }
 
-class _PlayerCoverPage extends ConsumerWidget {
+/// 封面页：iMusic 同款旋转唱片（黑胶底 + 中心圆封面 + 唱臂起落）。
+/// 点击进入歌词页（外层 onTapCover 接线）。转速 10°/s，暂停停在当前角度。
+class _PlayerCoverPage extends ConsumerStatefulWidget {
   final bool isPlaying;
   final VoidCallback? onTapCover;
   const _PlayerCoverPage({required this.isPlaying, this.onTapCover});
 
+  /// 唱臂角度（SVG 同款）：暂停抬起 / 播放落碟
+  static const _armRestDeg = 44.0;
+  static const _armPlayDeg = 26.0;
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_PlayerCoverPage> createState() => _PlayerCoverPageState();
+}
+
+class _PlayerCoverPageState extends ConsumerState<_PlayerCoverPage>
+    with SingleTickerProviderStateMixin {
+  // iMusic 同款转速：10°/s（36s 一圈），暂停 controller.stop 保留角度
+  late final AnimationController _spin = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 36),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.isPlaying) _spin.repeat();
+  }
+
+  @override
+  void didUpdateWidget(covariant _PlayerCoverPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isPlaying != oldWidget.isPlaying) {
+      widget.isPlaying ? _spin.repeat() : _spin.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _spin.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     ref.watch(currentSongIdentityProvider);
     final song = ref.read(playbackControllerProvider).currentSong;
-    final bgMode = ref.watch(fullScreenBackgroundModeProvider);
-    final coverColorAsync = ref.watch(currentCoverColorProvider);
-    final dominantColor = coverColorAsync.whenOrNull(
-      data: (result) => result?.dominantColor,
-    );
-    final coverSize = ResponsiveLayout.albumArtSize(context);
-    final borderRadius = ResponsiveLayout.isTablet(context) ? 28.0 : 24.0;
+    final size =
+        (MediaQuery.of(context).size.width * 0.62).clamp(200.0, 300.0);
 
     return Center(
       child: GestureDetector(
-        onTap: onTapCover,
-        child: AnimatedScale(
-          duration: const Duration(milliseconds: 500),
-          scale: isPlaying ? 1.0 : 0.95,
-          curve: Curves.easeOutCubic,
-          child: Container(
-            width: coverSize,
-            height: coverSize,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(borderRadius),
-              boxShadow: [
-                BoxShadow(
-                  color:
-                      bgMode == FullScreenBackgroundMode.theme &&
-                          dominantColor != null
-                      ? HSLColor.fromColor(dominantColor)
-                            .withLightness(
-                              (HSLColor.fromColor(dominantColor).lightness - 0.2)
-                                  .clamp(0.0, 0.5),
-                            )
-                            .toColor()
-                            .withValues(alpha: 0.4)
-                      : Colors.black.withValues(alpha: 0.5),
-                  blurRadius: 50,
-                  offset: const Offset(0, 25),
+        onTap: widget.onTapCover,
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              RepaintBoundary(
+                child: RotationTransition(
+                  turns: _spin,
+                  child: _buildDisc(song, size),
                 ),
-              ],
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: _buildCoverImage(song),
+              ),
+              // 唱臂：相对唱片 right -11% / top -9% / 56% 宽，随播放起落
+              Positioned(
+                right: -size * 0.11,
+                top: -size * 0.09,
+                width: size * 0.56,
+                height: size * 0.56,
+                child: AnimatedRotation(
+                  turns:
+                      (widget.isPlaying
+                          ? _PlayerCoverPage._armPlayDeg
+                          : _PlayerCoverPage._armRestDeg) /
+                      360,
+                  // SVG transform-origin 86.5% 13.5%
+                  alignment: const Alignment(0.73, -0.73),
+                  duration: const Duration(milliseconds: 720),
+                  curve: Curves.easeOutBack,
+                  child: const RepaintBoundary(child: _Tonearm()),
+                ),
+              ),
+            ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildDisc(Song? song, double size) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        boxShadow: const [
+          // iMusic: 0 12px 46px rgba(0,0,0,.55)
+          BoxShadow(
+            color: Color(0x8C000000),
+            blurRadius: 46,
+            offset: Offset(0, 12),
+          ),
+        ],
+      ),
+      child: CustomPaint(
+        painter: const _VinylPainter(),
+        child: Center(child: _buildCenterCover(song, size * 0.62)),
+      ),
+    );
+  }
+
+  /// 中心圆封面：直径 62%，外圈 2px 黑环 + 1px 白高光环
+  Widget _buildCenterCover(Song? song, double diameter) {
+    return Container(
+      width: diameter,
+      height: diameter,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: Colors.black.withValues(alpha: 0.5),
+          width: 2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.white.withValues(alpha: 0.06),
+            blurRadius: 0,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      child: ClipOval(child: _buildCoverImage(song)),
     );
   }
 
@@ -692,6 +778,152 @@ class _PlayerCoverPage extends ConsumerWidget {
       child: const Icon(Icons.music_note, size: 60, color: Colors.white24),
     );
   }
+}
+
+/// 黑胶底纹：iMusic .disc-vinyl 同款
+/// （细密纹路 repeating-radial + 偏光径向渐变 + 边缘内阴影）
+class _VinylPainter extends CustomPainter {
+  const _VinylPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2;
+
+    // radial-gradient(circle at 38% 32%, #1a1a1f 0%, #0a0a0c 55%, #030304 100%)
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..shader = const RadialGradient(
+          center: Alignment(-0.24, -0.36),
+          colors: [Color(0xFF1A1A1F), Color(0xFF0A0A0C), Color(0xFF030304)],
+          stops: [0.0, 0.55, 1.0],
+        ).createShader(Rect.fromCircle(center: center, radius: radius)),
+    );
+
+    // 细密纹路：每 5px 一道 1px 白 2.8% 环
+    final groove = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1
+      ..color = Colors.white.withValues(alpha: 0.028);
+    for (double r = radius * 0.62; r <= radius - 1; r += 5) {
+      canvas.drawCircle(center, r, groove);
+    }
+
+    // inset 0 0 30px rgba(0,0,0,.75)
+    canvas.drawCircle(
+      center,
+      radius - 12,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 24
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10)
+        ..color = Colors.black.withValues(alpha: 0.5),
+    );
+
+    // inset 0 0 0 1px rgba(255,255,255,.06)
+    canvas.drawCircle(
+      center,
+      radius - 0.5,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = Colors.white.withValues(alpha: 0.06),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _VinylPainter oldDelegate) => false;
+}
+
+/// 唱臂：按 iMusic 的 SVG viewBox 100x100 逐部件复刻
+class _Tonearm extends StatelessWidget {
+  const _Tonearm();
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(painter: const _TonearmPainter());
+  }
+}
+
+class _TonearmPainter extends CustomPainter {
+  const _TonearmPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.width == 0) return;
+    canvas.scale(size.width / 100);
+    const pivot = Offset(86, 14);
+    const tip = Offset(40.6, 52.6);
+    final white = Colors.white;
+
+    void circle(Offset c, double r, Paint p) => canvas.drawCircle(c, r, p);
+    Paint fill(Color color) =>
+        Paint()..color = color..style = PaintingStyle.fill;
+    Paint stroke(Color color, double w) => Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = w;
+
+    // 轴座底座
+    circle(pivot, 10.8, fill(const Color(0xFF2A2E36)));
+    circle(pivot, 10.8, stroke(white.withValues(alpha: 0.08), 1.2));
+    circle(pivot, 6.4, fill(const Color(0xFF4A4E56)));
+    circle(pivot, 1.7, fill(const Color(0xFF8A8E96)));
+    circle(const Offset(84.2, 11.6), 1.5, fill(white.withValues(alpha: 0.16)));
+
+    // 配重块（轴座后方，rotate -20°）
+    canvas.save();
+    canvas.translate(91.2, 8.8);
+    canvas.rotate(-20 * 3.14159265 / 180);
+    canvas.drawOval(Offset.zero & const Size(10.4, 7.2),
+        fill(const Color(0xFF3A3E46)));
+    canvas.drawOval(const Offset(-1.2, -1.4) & const Size(4.2, 1.9),
+        fill(white.withValues(alpha: 0.22)));
+    canvas.restore();
+
+    // 臂管：阴影 + 主体 + 高光
+    final rodShadow = Paint()
+      ..color = Colors.black.withValues(alpha: 0.38)
+      ..strokeWidth = 3.6
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(pivot, tip, rodShadow);
+    final rod = Paint()
+      ..color = const Color(0xFFE9ECF1)
+      ..strokeWidth = 2.6
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(pivot, tip, rod);
+    final rodHl = Paint()
+      ..color = white.withValues(alpha: 0.42)
+      ..strokeWidth = 1
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(const Offset(82, 18.2), const Offset(44.2, 50.1), rodHl);
+
+    // 唱头（rotate 32° 围绕 tip）
+    canvas.save();
+    canvas.translate(tip.dx, tip.dy);
+    canvas.rotate(32 * 3.14159265 / 180);
+    canvas.translate(-tip.dx, -tip.dy);
+    RRect rrect(double l, double t, double w, double h, double r) =>
+        RRect.fromRectAndRadius(Rect.fromLTWH(l, t, w, h), Radius.circular(r));
+    canvas.drawRRect(rrect(33.2, 48.4, 14.6, 8.4, 1.9),
+        fill(const Color(0xFF1A1D22)));
+    canvas.drawRRect(rrect(33.2, 48.4, 14.6, 8.4, 1.9),
+        stroke(white.withValues(alpha: 0.08), 1));
+    canvas.drawRRect(rrect(34.2, 49.1, 12.2, 1.7, 0.85),
+        fill(white.withValues(alpha: 0.12)));
+    canvas.drawRRect(
+        rrect(46.5, 49.9, 4.6, 1.15, 0.55), fill(const Color(0xFF9AA0AA)));
+    canvas.drawRRect(rrect(33.6, 52.1, 7.4, 3.3, 0.65),
+        fill(const Color(0xFF0D0F13)));
+    circle(const Offset(36.8, 56.9), 1.05, fill(Colors.black.withValues(alpha: 0.38)));
+    circle(const Offset(36.8, 56.4), 1.0, fill(const Color(0xFFE9ECF1)));
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _TonearmPainter oldDelegate) => false;
 }
 
 class _PlayerLyricsPage extends ConsumerWidget {
@@ -905,6 +1137,24 @@ class _PlayerSongInfo extends ConsumerWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
+            ),
+          ),
+          // 灵动岛歌词开关（开=绿色高亮，与通知栏"岛"按钮同一效果）
+          ValueListenableBuilder<bool>(
+            valueListenable: ref.watch(audioHandlerProvider).islandState,
+            builder: (context, on, _) => IconButton(
+              onPressed: () => ref.read(islandControllerProvider).toggle(),
+              tooltip: context.tr('灵动岛歌词'),
+              icon: Text(
+                '岛',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: on
+                      ? const Color(0xFF31C27C)
+                      : Colors.white.withValues(alpha: 0.7),
+                ),
+              ),
             ),
           ),
           IconButton(
@@ -1137,40 +1387,55 @@ class _BackgroundLayerState extends State<_BackgroundLayer>
             mode == FullScreenBackgroundMode.cover)
           Stack(
             children: [
+              // iMusic 同款：封面模糊 blur(80px) brightness(.62) saturate(1.65) scale(1.4)
               Positioned.fill(
-                child: widget.animate
-                    ? Transform.scale(
-                        scale: 1.0 + animationValue * 0.018,
-                        child: MusicCoverImage(
-                          url: widget.coverUrl,
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          height: double.infinity,
-                          cacheWidth: 512,
-                          cacheHeight: 512,
-                          filterQuality: FilterQuality.low,
-                        ),
-                      )
-                    : MusicCoverImage(
-                        url: widget.coverUrl,
-                        fit: BoxFit.cover,
-                        width: double.infinity,
-                        height: double.infinity,
-                        cacheWidth: 512,
-                        cacheHeight: 512,
-                        filterQuality: FilterQuality.low,
-                      ),
+                child: ColorFiltered(
+                  colorFilter: const ColorFilter.matrix(<double>[
+                    0.9372, -0.2882, -0.0290, 0, 0, //
+                    -0.0858, 0.7349, -0.0290, 0, 0, //
+                    -0.0858, -0.2882, 0.9940, 0, 0, //
+                    0, 0, 0, 1, 0, //
+                  ]),
+                  child: ImageFiltered(
+                    imageFilter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
+                    child: Transform.scale(
+                      scale: 1.4,
+                      child: widget.animate
+                          ? Transform.scale(
+                              scale: 1.0 + animationValue * 0.018,
+                              child: MusicCoverImage(
+                                url: widget.coverUrl,
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                                height: double.infinity,
+                                cacheWidth: 256,
+                                cacheHeight: 256,
+                                filterQuality: FilterQuality.low,
+                              ),
+                            )
+                          : MusicCoverImage(
+                              url: widget.coverUrl,
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                              height: double.infinity,
+                              cacheWidth: 256,
+                              cacheHeight: 256,
+                              filterQuality: FilterQuality.low,
+                            ),
+                    ),
+                  ),
+                ),
               ),
+              // iMusic .pmask 暗罩：rgba(10,12,16,.22) → rgba(10,12,16,.66)
               Positioned.fill(
-                child: Container(
+                child: DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                       colors: [
-                        Colors.black.withValues(alpha: 0.7),
-                        Colors.black.withValues(alpha: 0.8),
-                        Colors.black.withValues(alpha: 0.9),
+                        const Color(0xFF0A0C10).withValues(alpha: 0.22),
+                        const Color(0xFF0A0C10).withValues(alpha: 0.66),
                       ],
                     ),
                   ),

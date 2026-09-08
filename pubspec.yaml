@@ -1,7 +1,7 @@
 name: mintmusic
 description: "薄荷音乐 - A Flutter music player replicating CeruMusic for Android"
 publish_to: 'none'
-version: 1.0.5+5
+version: 1.0.7+8007
 
 environment:
   sdk: ^3.11.4
@@ -81,6 +81,7 @@ flutter:
     - assets/amll/amll-core.css
     - assets/amll/lyric_player.html
     - assets/fonts/PingFangSC-Semibold.woff2
+    - assets/sources/
 
   fonts:
     - family: lyricfont

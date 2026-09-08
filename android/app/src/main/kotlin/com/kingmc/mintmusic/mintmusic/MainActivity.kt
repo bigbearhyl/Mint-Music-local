@@ -19,6 +19,12 @@ import com.ryanheise.audioservice.AudioServiceActivity
 import java.io.File
 
 class MainActivity : AudioServiceActivity() {
+    companion object {
+        /** 灵动岛点击/通知栏 → 拉起应用并打开全屏播放页 */
+        const val EXTRA_OPEN_PLAYER = "openPlayer"
+    }
+
+    private var islandHandler: IslandChannelHandler? = null
     private val MEDIA_CHANNEL = "com.mintmusic/media"
     private val TAG_WRITER_CHANNEL = "com.mintmusic/tag_writer"
     private val AUDIO_EFFECTS_CHANNEL = "com.mintmusic/audio_effects"
@@ -61,6 +67,26 @@ class MainActivity : AudioServiceActivity() {
             .setMethodCallHandler(audioEffectsHandler)
         EventChannel(flutterEngine.dartExecutor.binaryMessenger, "$AUDIO_EFFECTS_CHANNEL/visualizer")
             .setStreamHandler(audioEffectsHandler)
+
+        IslandChannelHandler(this).also {
+            islandHandler = it
+            it.attach(flutterEngine)
+        }
+        // 冷启动即由灵动岛/通知栏拉起：把"打开播放页"请求转给 Dart
+        consumeOpenPlayerIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        consumeOpenPlayerIntent(intent)
+    }
+
+    private fun consumeOpenPlayerIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_OPEN_PLAYER, false) == true) {
+            intent.removeExtra(EXTRA_OPEN_PLAYER)
+            islandHandler?.notifyOpenPlayer()
+        }
     }
 
     private inner class AudioEffectsHandler : MethodChannel.MethodCallHandler,

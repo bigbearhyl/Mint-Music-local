@@ -20,6 +20,8 @@ import '../application/update_providers.dart';
 import '../data/settings_service.dart';
 import '../data/update_service.dart';
 import 'update_dialog.dart';
+import '../../player/application/playback_controller.dart';
+import '../../player/platform/island_controller.dart';
 import '../../player/presentation/widgets/amll_lyric_player.dart';
 
 const _settingsSheetAnimationStyle = AnimationStyle(
@@ -844,7 +846,7 @@ class _AppearanceContent extends ConsumerWidget {
               };
               final container = ProviderScope.containerOf(context);
               container.read(fullScreenBackgroundModeProvider.notifier).state =
-                  map[v] ?? FullScreenBackgroundMode.theme;
+                  map[v] ?? FullScreenBackgroundMode.cover;
               unawaited(
                 _doPersist(
                   container,
@@ -945,8 +947,57 @@ class _PlaybackContent extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildPlaybackGroup(context, ref, colors),
+        _buildFloatingLyricGroup(context, ref, colors),
         _buildEqualizerGroup(context, ref, colors),
         _buildAudioEffectGroup(context, ref, colors),
+      ],
+    );
+  }
+
+  /// 悬浮歌词：灵动岛 + 桌面歌词（与通知栏按钮同一套开关）
+  Widget _buildFloatingLyricGroup(
+    BuildContext context,
+    WidgetRef ref,
+    ThemeColors colors,
+  ) {
+    final handler = ref.watch(audioHandlerProvider);
+    final island = ref.watch(islandControllerProvider);
+    return _SettingGroup(
+      title: '悬浮歌词',
+      subtitle: '灵动岛与桌面歌词（需要"显示在其他应用上层"权限）',
+      colors: colors,
+      children: [
+        _SettingRow(
+          icon: Icons.smart_button,
+          title: '灵动岛歌词',
+          subtitle: '顶部胶囊滚动显示当前歌词，点击展开播放控制',
+          trailing: ValueListenableBuilder<bool>(
+            valueListenable: handler.islandState,
+            builder: (context, on, _) => Switch(
+              value: on,
+              onChanged: (_) => island.toggle(),
+              activeTrackColor: colors.primary.withValues(alpha: 0.3),
+              activeThumbColor: colors.primary,
+            ),
+          ),
+          colors: colors,
+        ),
+        _SettingDivider(colors: colors),
+        _SettingRow(
+          icon: Icons.lyrics,
+          title: '桌面歌词',
+          subtitle: '可拖动的桌面歌词条，双击锁定（打游戏不误触）',
+          trailing: ValueListenableBuilder<bool>(
+            valueListenable: handler.lyricState,
+            builder: (context, on, _) => Switch(
+              value: on,
+              onChanged: (_) => island.toggleDesktopLyric(),
+              activeTrackColor: colors.primary.withValues(alpha: 0.3),
+              activeThumbColor: colors.primary,
+            ),
+          ),
+          colors: colors,
+        ),
       ],
     );
   }

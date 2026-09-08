@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 通知栏"灵动岛"按钮：顶部药丸 + 音符 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M5,6.5h14a3,3 0 0,1 0,6H5a3,3 0 0,1 0,-6z"/>
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M9,15.5h6a2.2,2.2 0 0,1 0,4.4H9a2.2,2.2 0 0,1 0,-4.4z"/>
+</vector>

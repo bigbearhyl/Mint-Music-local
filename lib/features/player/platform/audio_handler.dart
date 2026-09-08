@@ -42,6 +42,19 @@ class MusicAudioHandler extends BaseAudioHandler
   VoidCallback? onSkipNext;
   VoidCallback? onSkipPrevious;
 
+  /// 自定义通知按钮回调（由 IslandController 设置）
+  VoidCallback? onFavoriteToggle;
+  VoidCallback? onIslandToggle;
+
+  /// 通知栏"桌面歌词"按钮回调（由 IslandController 设置）
+  VoidCallback? onLyricToggle;
+
+  /// 通知栏可观察状态
+  final ValueNotifier<bool> favState = ValueNotifier(false);
+  final ValueNotifier<bool> islandState = ValueNotifier(false);
+  final ValueNotifier<bool> lyricState = ValueNotifier(false);
+  final ValueNotifier<bool> lockState = ValueNotifier(false);
+
   MusicAudioHandler() {
     _init();
   }
@@ -50,6 +63,11 @@ class MusicAudioHandler extends BaseAudioHandler
     _player.playbackEventStream.listen((event) {
       _broadcastState();
     });
+
+    favState.addListener(_broadcastState);
+    islandState.addListener(_broadcastState);
+    lyricState.addListener(_broadcastState);
+    lockState.addListener(_broadcastState);
 
     _player.positionStream.listen((position) {
       final now = DateTime.now();
@@ -79,16 +97,36 @@ class MusicAudioHandler extends BaseAudioHandler
     });
   }
 
+  List<MediaControl> _buildControls() {
+    return [
+      MediaControl.custom(
+        androidIcon: favState.value ? 'drawable/n_heart_filled' : 'drawable/n_heart',
+        label: '收藏',
+        name: 'toggleFavorite',
+      ),
+      MediaControl.skipToPrevious,
+      _player.playing ? MediaControl.pause : MediaControl.play,
+      MediaControl.skipToNext,
+      MediaControl.custom(
+        androidIcon: 'drawable/n_lyric',
+        label: '桌面歌词',
+        name: 'toggleDesktopLyric',
+      ),
+      MediaControl.custom(
+        androidIcon: 'drawable/n_island',
+        label: '灵动岛',
+        name: 'toggleIsland',
+      ),
+      MediaControl.stop,
+    ];
+  }
+
   void _broadcastState() {
     final processingState = _mapProcessingState(_player.processingState);
     playbackState.add(
       PlaybackState(
-        controls: [
-          MediaControl.skipToPrevious,
-          _player.playing ? MediaControl.pause : MediaControl.play,
-          MediaControl.skipToNext,
-          MediaControl.stop,
-        ],
+        controls: _buildControls(),
+        androidCompactActionIndices: const [1, 2, 3],
         systemActions: const {
           MediaAction.seek,
           MediaAction.seekForward,
@@ -665,6 +703,21 @@ class MusicAudioHandler extends BaseAudioHandler
         return AudioProcessingState.ready;
       case ProcessingState.completed:
         return AudioProcessingState.completed;
+    }
+  }
+
+  @override
+  Future<void> onCustomAction(String name, Map<String, dynamic>? extras) async {
+    switch (name) {
+      case 'toggleFavorite':
+        onFavoriteToggle?.call();
+        break;
+      case 'toggleIsland':
+        onIslandToggle?.call();
+        break;
+      case 'toggleDesktopLyric':
+        onLyricToggle?.call();
+        break;
     }
   }
 

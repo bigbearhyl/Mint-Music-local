@@ -9,6 +9,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <application
         android:label="薄荷音乐"
         android:name="${applicationName}"
@@ -46,6 +47,21 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+        </receiver>
+        <!-- 自定义通知栏按钮点击接收器 -->
+        <receiver
+            android:name=".NotifActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.mintmusic.PREV" />
+                <action android:name="com.mintmusic.NEXT" />
+                <action android:name="com.mintmusic.TOGGLE" />
+                <action android:name="com.mintmusic.FAV" />
+                <action android:name="com.mintmusic.LYRIC" />
+                <action android:name="com.mintmusic.ISLAND" />
+                <action android:name="com.mintmusic.LOCK" />
+                <action android:name="com.mintmusic.CLOSE" />
             </intent-filter>
         </receiver>
         <meta-data

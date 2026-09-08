@@ -280,7 +280,7 @@ class SettingsService {
 
   // -- full screen background mode --
   String getFullScreenBgMode() =>
-      _prefs.getString('full_screen_bg_mode') ?? 'theme';
+      _prefs.getString('full_screen_bg_mode') ?? 'cover';
   Future<void> setFullScreenBgMode(String v) =>
       _prefs.setString('full_screen_bg_mode', v);
 

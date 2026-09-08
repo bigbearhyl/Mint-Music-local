@@ -14,6 +14,8 @@ import '../../../shared/widgets/music_cover_image.dart';
 import '../application/playlist_providers.dart';
 import '../../player/application/playback_controller.dart';
 import '../../plugin/application/plugin_providers.dart';
+import '../../plugin/data/qq_login_service.dart';
+import 'widgets/qq_login_dialog.dart';
 import '../domain/models/playlist.dart' as local_playlist;
 import '../../discover/domain/models/playlist.dart' as discover_playlist;
 import '../utils/cerumusic_playlist_importer.dart';
@@ -70,6 +72,9 @@ class LibraryPage extends ConsumerWidget {
             ),
           ),
           const Spacer(),
+          // QQ 音乐扫码登录入口（红框位置）：已登录则打开「QQ 我的音乐」
+          _QqLoginEntry(iconSize: isTablet ? 26 : 22, colors: colors),
+          SizedBox(width: isTablet ? 18 : 14),
           GestureDetector(
             onTap: () => context.push('/recently-played'),
             child: Icon(Icons.history, size: isTablet ? 26 : 22, color: colors.textSecondary),
@@ -1439,6 +1444,60 @@ class LibraryPage extends ConsumerWidget {
         if (RegExp(r'^\d+$').hasMatch(trimmed)) return trimmed;
         return null;
     }
+  }
+}
+
+/// QQ 音乐入口：未登录弹出扫码登录；已登录打开「QQ 我的音乐」。
+class _QqLoginEntry extends StatefulWidget {
+  final double iconSize;
+  final ThemeColors colors;
+
+  const _QqLoginEntry({required this.iconSize, required this.colors});
+
+  @override
+  State<_QqLoginEntry> createState() => _QqLoginEntryState();
+}
+
+class _QqLoginEntryState extends State<_QqLoginEntry> {
+  bool _loggedIn = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _check();
+  }
+
+  Future<void> _check() async {
+    final ok = await QqLoginService.instance.isLoggedIn();
+    if (mounted) setState(() => _loggedIn = ok);
+  }
+
+  Future<void> _tap() async {
+    if (_loggedIn) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const QqMusicPage()),
+      );
+      await _check();
+      return;
+    }
+    final ok = await showQqLoginDialog(context);
+    if (ok == true && mounted) {
+      await _check();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: _tap,
+      child: Icon(
+        Icons.cloud_queue,
+        size: widget.iconSize,
+        color: _loggedIn
+            ? const Color(0xFF31C27C)
+            : widget.colors.textSecondary,
+      ),
+    );
   }
 }
 
