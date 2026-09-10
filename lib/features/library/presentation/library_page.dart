@@ -1490,6 +1490,8 @@ class _CloudLoginEntryState extends State<_CloudLoginEntry> {
     final colors = widget.colors;
     final choice = await showModalBottomSheet<String>(
       context: context,
+      // 走根 Navigator 的 overlay：否则会被 AppShell 里层级更高的 MiniPlayer 遮住
+      useRootNavigator: true,
       backgroundColor: colors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),

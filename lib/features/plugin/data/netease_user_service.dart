@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../../core/network/music_api_service.dart';
 import '../../../core/network/netease_crypto.dart';
@@ -145,6 +146,35 @@ class NeteaseUserService {
     if (info == null || !info.cookie.contains('MUSIC_U=')) {
       throw const NeedLogin();
     }
+    if (info.uid > 0) return info;
+    // uid 缺失（Cookie 导入 / WebView 官方登录场景）：先拉一次账号信息补全，
+    // 否则「我喜欢的」「我的歌单」会因为 uid=0 拉不到任何数据。
+    try {
+      final data = await _weApiPost(
+        path: '/weapi/nuser/account/get',
+        params: const {},
+        cookie: info.cookie,
+      );
+      final profile = data['profile'] is Map ? data['profile'] as Map : const {};
+      final uid = (profile['userId'] as num?)?.toInt() ?? 0;
+      if (uid > 0) {
+        final nickname = (profile['nickname'] as String?) ?? '';
+        final avatarUrl = (profile['avatarUrl'] as String?) ?? '';
+        await NeteaseLoginService.instance.updateProfile(
+          nickname: nickname,
+          avatarUrl: avatarUrl,
+          uid: uid,
+        );
+        return NeteaseLoginInfo(
+          cookie: info.cookie,
+          nickname: nickname,
+          avatarUrl: avatarUrl,
+          uid: uid,
+        );
+      }
+    } catch (e) {
+      debugPrint('[NeteaseUser] fill uid failed: $e');
+    }
     return info;
   }
 
@@ -154,19 +184,27 @@ class NeteaseUserService {
     required String cookie,
   }) async {
     final encoded = NeteaseCrypto.weapi(params);
+    // weapi 接口需要在 URL 带上 csrf_token（取自 cookie 的 __csrf），否则可能被服务端拒绝
+    final csrf = RegExp(r'__csrf=([^;]+)').firstMatch(cookie)?.group(1) ?? '';
+    final sep = path.contains('?') ? '&' : '?';
+    // 手动 urlencode 请求体：避免 Dio 对「Map + formUrlEncoded」的自动编码差异
+    // 导致最终发出的 body 不是 params&encSecKey 形式（服务端会返回空）。
+    final body = 'params=${Uri.encodeComponent(encoded['params'] ?? '')}'
+        '&encSecKey=${Uri.encodeComponent(encoded['encSecKey'] ?? '')}';
     final resp = await _dio.post(
-      '$_host$path',
-      data: {
-        'params': encoded['params'],
-        'encSecKey': encoded['encSecKey'],
-      },
+      '$_host$path${sep}csrf_token=$csrf',
+      data: body,
       options: Options(
         contentType: Headers.formUrlEncodedContentType,
-        headers: {'Cookie': cookie},
+        headers: {'Cookie': 'os=pc; appver=3.1.17; $cookie'},
         responseType: ResponseType.plain,
       ),
     );
     final raw = resp.data is String ? resp.data as String : '';
+    debugPrint(
+      '[NeteaseUser] $path status=${resp.statusCode} len=${raw.length} '
+      '${raw.isEmpty ? '(empty)' : (raw.length > 220 ? raw.substring(0, 220) : raw)}',
+    );
     if (raw.isEmpty) return const {};
     final decoded = jsonDecode(raw);
     if (decoded is! Map) return const {};

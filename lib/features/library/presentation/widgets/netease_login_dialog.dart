@@ -12,6 +12,7 @@ import '../../../player/domain/models/song.dart';
 import '../../../plugin/data/netease_login_service.dart';
 import '../../../plugin/data/netease_user_service.dart';
 import '../../../plugin/data/netease_music_source.dart';
+import 'netease_web_login_page.dart';
 
 /// 网易云扫码登录弹窗。
 ///
@@ -92,6 +93,9 @@ class _NeteaseLoginDialogState extends ConsumerState<_NeteaseLoginDialog> {
         _scanned = false;
       });
       _start();
+    } else if (r is Map) {
+      _pollTimer?.cancel();
+      setState(() => _status = '登录失败：${r['message'] ?? '未知错误'}');
     } else if (r is NeteaseLoginInfo) {
       _pollTimer?.cancel();
       // 注入到内置源
@@ -100,6 +104,86 @@ class _NeteaseLoginDialogState extends ConsumerState<_NeteaseLoginDialog> {
       await Future<void>.delayed(const Duration(milliseconds: 600));
       if (mounted) Navigator.of(context).pop(true);
     }
+  }
+
+  /// 打开网易云「官方网页登录」：内嵌官方页面登录，避开第三方 API 的 8821 风控。
+  Future<void> _openWebLogin() async {
+    final ok = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const NeteaseWebLoginPage()),
+    );
+    if (!mounted) return;
+    if (ok == true) {
+      _pollTimer?.cancel();
+      setState(() => _status = '登录成功 ✓');
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      if (mounted) Navigator.of(context).pop(true);
+    }
+  }
+
+  /// 「粘贴 Cookie 登录」：网易云扫码被行为验证码风控时的最稳替代方案。
+  Future<void> _openCookieInput() async {
+    final ctrl = TextEditingController();
+    final text = await showDialog<String>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('粘贴 Cookie 登录'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '1. 电脑浏览器登录 music.163.com\n'
+              '2. 按 F12 → Network → 刷新页面 → 点任一请求\n'
+              '3. 复制 Request Headers 里 Cookie 的整段内容\n'
+              '4. 粘贴到下面（需含 MUSIC_U）',
+              style: TextStyle(fontSize: 12),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: ctrl,
+              maxLines: 4,
+              decoration: const InputDecoration(
+                hintText: 'MUSIC_U=...; __csrf=...; NMTID=...',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(c).pop(),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(c).pop(ctrl.text),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+    if (text == null || text.trim().isEmpty) return;
+    final svc = NeteaseLoginService.instance;
+    final ok = await svc.importCookie(text);
+    if (!mounted) return;
+    if (!ok) {
+      setState(() => _status = 'Cookie 无效：未找到 MUSIC_U');
+      return;
+    }
+    // 用 Cookie 拉一次用户资料，补全昵称/头像/uid（uid 是「我的歌单」接口必需）
+    try {
+      final p = await NeteaseUserService.instance.getUserAccount();
+      await svc.updateProfile(
+        nickname: p.nickname,
+        avatarUrl: p.avatarUrl,
+        uid: p.uid,
+      );
+    } catch (_) {}
+    final info = await svc.load();
+    NeteaseMusicSource.loginCookie = info?.cookie ?? '';
+    if (!mounted) return;
+    setState(() => _status = '登录成功 ✓');
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    if (mounted) Navigator.of(context).pop(true);
   }
 
   @override
@@ -195,6 +279,15 @@ class _NeteaseLoginDialogState extends ConsumerState<_NeteaseLoginDialog> {
               '登录后可在「我的音乐」查看喜欢的音乐和歌单',
               style: TextStyle(color: colors.textHint, fontSize: 11),
               textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 4),
+            TextButton(
+              onPressed: _openWebLogin,
+              child: const Text('打开网易云官方登录页（推荐）'),
+            ),
+            TextButton(
+              onPressed: _openCookieInput,
+              child: const Text('或：手动粘贴 Cookie 登录'),
             ),
           ],
         ),

@@ -64,11 +64,14 @@ class NeteaseCrypto {
   static String _rsaEncrypt(List<int> data) {
     final parser = encrypt.RSAKeyParser();
     final key = parser.parse(_publicKeyPem) as RSAPublicKey;
-    final cipher = PKCS1Encoding(RSAEngine())
-      ..init(true, PublicKeyParameter<RSAPublicKey>(key));
+    // 网易云 weapi 的 encSecKey 是「教科书 RSA」，**没有 PKCS#1 padding**：
+    // 把 secretKey 看作大端整数做 m^e mod n，左边补 0 到 modulus 长度（128 字节）。
+    // 服务端解密后直接把这 128 位整数当 AES 密钥用，多加 padding 会导致密钥错误、
+    // 接口返回 200 但 body 为空。
+    // 也不能用 PKCS1Encoding 包裹（它会再补一层 padding，且要求输入 ≤117 字节）。
+    final rsa = RSAEngine()..init(true, PublicKeyParameter<RSAPublicKey>(key));
     final input = Uint8List(128);
     input.setRange(128 - data.length, 128, data);
-    final output = cipher.process(input);
-    return hex.encode(output);
+    return hex.encode(rsa.process(input));
   }
 }
