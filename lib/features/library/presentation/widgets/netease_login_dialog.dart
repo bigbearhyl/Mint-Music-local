@@ -308,10 +308,87 @@ class _NeteaseMusicPageState extends ConsumerState<NeteaseMusicPage>
     with SingleTickerProviderStateMixin {
   late final TabController _tab = TabController(length: 3, vsync: this);
 
+  /// 登录态是否已过期（服务端返回 301）。
+  bool _authExpired = false;
+
+  /// 自增后强制三个 Tab 重建，从而重新拉取数据。
+  int _tabsKey = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkAuth());
+  }
+
   @override
   void dispose() {
     _tab.dispose();
     super.dispose();
+  }
+
+  /// 主动检测登录态：过期时在顶部给出提示，
+  /// 用户不用自己「猜」为什么歌单是空的（网易云 Web 端登录态会过期）。
+  Future<void> _checkAuth() async {
+    try {
+      await NeteaseUserService.instance.getUserAccount();
+      if (mounted) setState(() => _authExpired = false);
+    } catch (e) {
+      if (!mounted) return;
+      if (e is NeteaseAuthExpired || e is NeedLogin) {
+        setState(() => _authExpired = true);
+      }
+    }
+  }
+
+  /// 重新登录（弹窗内含扫码 / 官方网页 / Cookie 三种入口），成功后刷新全部 Tab。
+  Future<void> _relogin() async {
+    final ok = await showNeteaseLoginDialog(context);
+    if (!mounted) return;
+    if (ok == true) {
+      final info = await NeteaseLoginService.instance.load();
+      NeteaseMusicSource.loginCookie = info?.cookie ?? '';
+      if (!mounted) return;
+      setState(() {
+        _authExpired = false;
+        _tabsKey++;
+      });
+    }
+  }
+
+  Widget _buildAuthExpiredBanner() {
+    return Material(
+      color: const Color(0xFFFFF3E0),
+      child: InkWell(
+        onTap: _relogin,
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              Icon(
+                Icons.warning_amber_rounded,
+                size: 18,
+                color: Color(0xFFB26A00),
+              ),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '网易云登录已过期，歌单/收藏可能无法加载',
+                  style: TextStyle(fontSize: 12.5, color: Color(0xFFB26A00)),
+                ),
+              ),
+              Text(
+                '重新登录',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFFC62F2F),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -341,12 +418,20 @@ class _NeteaseMusicPageState extends ConsumerState<NeteaseMusicPage>
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tab,
-        children: const [
-          _NeteaseAccountTab(),
-          _NeteaseLikedTab(),
-          _NeteasePlaylistsTab(),
+      body: Column(
+        children: [
+          if (_authExpired) _buildAuthExpiredBanner(),
+          Expanded(
+            child: TabBarView(
+              key: ValueKey('netease_tabs_$_tabsKey'),
+              controller: _tab,
+              children: const [
+                _NeteaseAccountTab(),
+                _NeteaseLikedTab(),
+                _NeteasePlaylistsTab(),
+              ],
+            ),
+          ),
         ],
       ),
     );

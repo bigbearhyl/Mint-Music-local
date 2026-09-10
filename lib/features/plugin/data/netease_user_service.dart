@@ -208,6 +208,10 @@ class NeteaseUserService {
     if (raw.isEmpty) return const {};
     final decoded = jsonDecode(raw);
     if (decoded is! Map) return const {};
+    // 服务端 code=301 = 需要登录 / 登录态已失效
+    if ((decoded['code'] as num?)?.toInt() == 301) {
+      throw const NeteaseAuthExpired();
+    }
     return decoded;
   }
 
@@ -270,4 +274,12 @@ class NeedLogin implements Exception {
   const NeedLogin();
   @override
   String toString() => '需要先登录网易云音乐';
+}
+
+/// 网易云登录态已失效（服务端返回 code=301），需要重新登录。
+/// 与 [NeedLogin]（从未登录）区分开，便于 UI 给出「登录已过期，请重新登录」的提示。
+class NeteaseAuthExpired implements Exception {
+  const NeteaseAuthExpired();
+  @override
+  String toString() => '网易云登录已过期，请重新登录';
 }
