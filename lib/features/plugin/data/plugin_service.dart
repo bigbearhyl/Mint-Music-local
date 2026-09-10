@@ -5,6 +5,8 @@ import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'qq_login_service.dart';
+import 'netease_login_service.dart';
+import 'netease_music_source.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../platform/js_engine_service.dart';
@@ -437,6 +439,15 @@ class PluginService {
 
   /// 加载随包发布的内置音源脚本（洛雪/LX 格式，复用同一套 JS 运行时）。
   Future<void> _loadBuiltInSources() async {
+    // 注入网易云登录 cookie。网易云是 Dart 内置实现（非 JS 脚本），
+    // 不能走下面的 `var COOKIE` 替换，改用静态字段。
+    try {
+      final wyLogin = await NeteaseLoginService.instance.load();
+      NeteaseMusicSource.loginCookie = wyLogin?.cookie ?? '';
+    } catch (_) {
+      NeteaseMusicSource.loginCookie = '';
+    }
+
     for (final entry in _builtInSourceAssets.entries) {
       final pluginId = entry.key;
       if (_loadedPlugins.containsKey(pluginId)) continue;

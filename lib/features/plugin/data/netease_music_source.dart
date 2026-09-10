@@ -39,6 +39,16 @@ class NeteaseMusicSource implements MusicSourceProvider {
     'Origin': 'https://music.163.com',
   };
 
+  /// 网易云登录 cookie（登录后由 PluginService 注入；未登录为空 → 维持匿名）。
+  /// 用途：让搜索/歌单/详情能拿到正版内容（匿名时周杰伦等会被替换成翻唱或直接缺失）。
+  static String loginCookie = '';
+
+  /// 带登录态的请求头（未登录时与 [_neteaseHeaders] 一致）
+  static Map<String, String> get _headersWithLogin {
+    if (loginCookie.isEmpty) return _neteaseHeaders;
+    return {..._neteaseHeaders, 'Cookie': loginCookie};
+  }
+
   // Proxy fallback
   static const _proxyPrimary = 'https://netease-cloud-music-api.fe-mm.com';
   static const _proxyFallback = 'https://ncmapi.btwoa.com';
@@ -212,7 +222,7 @@ class NeteaseMusicSource implements MusicSourceProvider {
 
     final response = await _apiService.post(
       url,
-      headers: _neteaseHeaders,
+      headers: _headersWithLogin,
       form: formData,
     );
 

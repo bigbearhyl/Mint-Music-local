@@ -15,7 +15,9 @@ import '../application/playlist_providers.dart';
 import '../../player/application/playback_controller.dart';
 import '../../plugin/application/plugin_providers.dart';
 import '../../plugin/data/qq_login_service.dart';
+import '../../plugin/data/netease_login_service.dart';
 import 'widgets/qq_login_dialog.dart';
+import 'widgets/netease_login_dialog.dart';
 import '../domain/models/playlist.dart' as local_playlist;
 import '../../discover/domain/models/playlist.dart' as discover_playlist;
 import '../utils/cerumusic_playlist_importer.dart';
@@ -72,8 +74,8 @@ class LibraryPage extends ConsumerWidget {
             ),
           ),
           const Spacer(),
-          // QQ 音乐扫码登录入口（红框位置）：已登录则打开「QQ 我的音乐」
-          _QqLoginEntry(iconSize: isTablet ? 26 : 22, colors: colors),
+          // 云同步入口：可选 QQ 音乐 / 网易云音乐，登录后查看收藏与歌单
+          _CloudLoginEntry(iconSize: isTablet ? 26 : 22, colors: colors),
           SizedBox(width: isTablet ? 18 : 14),
           GestureDetector(
             onTap: () => context.push('/recently-played'),
@@ -1448,18 +1450,23 @@ class LibraryPage extends ConsumerWidget {
 }
 
 /// QQ 音乐入口：未登录弹出扫码登录；已登录打开「QQ 我的音乐」。
-class _QqLoginEntry extends StatefulWidget {
+/// 云同步入口：点按弹出平台选择（QQ 音乐 / 网易云音乐）。
+///
+/// 已登录的平台直接进入「我的音乐」；未登录则先拉起扫码登录。
+/// 任一平台已登录时图标变绿提示。
+class _CloudLoginEntry extends StatefulWidget {
   final double iconSize;
   final ThemeColors colors;
 
-  const _QqLoginEntry({required this.iconSize, required this.colors});
+  const _CloudLoginEntry({required this.iconSize, required this.colors});
 
   @override
-  State<_QqLoginEntry> createState() => _QqLoginEntryState();
+  State<_CloudLoginEntry> createState() => _CloudLoginEntryState();
 }
 
-class _QqLoginEntryState extends State<_QqLoginEntry> {
-  bool _loggedIn = false;
+class _CloudLoginEntryState extends State<_CloudLoginEntry> {
+  bool _qqLoggedIn = false;
+  bool _wyLoggedIn = false;
 
   @override
   void initState() {
@@ -1468,22 +1475,89 @@ class _QqLoginEntryState extends State<_QqLoginEntry> {
   }
 
   Future<void> _check() async {
-    final ok = await QqLoginService.instance.isLoggedIn();
-    if (mounted) setState(() => _loggedIn = ok);
+    final qq = await QqLoginService.instance.isLoggedIn();
+    final wy = await NeteaseLoginService.instance.isLoggedIn();
+    if (!mounted) return;
+    setState(() {
+      _qqLoggedIn = qq;
+      _wyLoggedIn = wy;
+    });
   }
 
+  bool get _anyLoggedIn => _qqLoggedIn || _wyLoggedIn;
+
   Future<void> _tap() async {
-    if (_loggedIn) {
-      await Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const QqMusicPage()),
-      );
-      await _check();
-      return;
+    final colors = widget.colors;
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: colors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(Icons.cloud_sync, color: Color(0xFF31C27C)),
+              title: Text(ctx.tr('QQ 音乐')),
+              subtitle: Text(
+                _qqLoggedIn
+                    ? ctx.tr('已登录 · 点击查看我的音乐')
+                    : ctx.tr('未登录 · 扫码登录'),
+              ),
+              onTap: () => Navigator.of(ctx).pop('qq'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.cloud_sync, color: Color(0xFFC62F2F)),
+              title: Text(ctx.tr('网易云音乐')),
+              subtitle: Text(
+                _wyLoggedIn
+                    ? ctx.tr('已登录 · 点击查看我的音乐')
+                    : ctx.tr('未登录 · 扫码登录'),
+              ),
+              onTap: () => Navigator.of(ctx).pop('wy'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || choice == null) return;
+
+    if (choice == 'qq') {
+      if (_qqLoggedIn) {
+        await Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const QqMusicPage()),
+        );
+      } else {
+        final ok = await showQqLoginDialog(context);
+        if (ok == true && mounted) {
+          await _check();
+          if (!mounted) return;
+          await Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const QqMusicPage()),
+          );
+        }
+      }
+    } else {
+      if (_wyLoggedIn) {
+        await Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const NeteaseMusicPage()),
+        );
+      } else {
+        final ok = await showNeteaseLoginDialog(context);
+        if (ok == true && mounted) {
+          await _check();
+          if (!mounted) return;
+          await Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const NeteaseMusicPage()),
+          );
+        }
+      }
     }
-    final ok = await showQqLoginDialog(context);
-    if (ok == true && mounted) {
-      await _check();
-    }
+    await _check();
   }
 
   @override
@@ -1493,7 +1567,7 @@ class _QqLoginEntryState extends State<_QqLoginEntry> {
       child: Icon(
         Icons.cloud_queue,
         size: widget.iconSize,
-        color: _loggedIn
+        color: _anyLoggedIn
             ? const Color(0xFF31C27C)
             : widget.colors.textSecondary,
       ),
