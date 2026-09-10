@@ -115,6 +115,7 @@ class NeteaseLoginService {
         return info;
       }
       if (code == 802) return 'scan';
+      if (code == 800) return 'expire';
       return null;
     } catch (_) {
       return null;

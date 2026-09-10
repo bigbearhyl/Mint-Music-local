@@ -81,6 +81,17 @@ class _NeteaseLoginDialogState extends ConsumerState<_NeteaseLoginDialog> {
           _scanned = true;
         });
       }
+    } else if (r == 'expire') {
+      _pollTimer?.cancel();
+      setState(() => _status = '二维码已过期，正在重新生成...');
+      await Future<void>.delayed(const Duration(milliseconds: 800));
+      if (!mounted) return;
+      setState(() {
+        _unikey = null;
+        _loading = true;
+        _scanned = false;
+      });
+      _start();
     } else if (r is NeteaseLoginInfo) {
       _pollTimer?.cancel();
       // 注入到内置源
@@ -574,8 +585,10 @@ class NeteasePlaylistDetailPage extends ConsumerStatefulWidget {
 class _NeteasePlaylistDetailPageState
     extends ConsumerState<NeteasePlaylistDetailPage> {
   List<Song> _songs = const [];
+  List<Song> _displaySongs = const [];
   bool _loading = true;
   String? _error;
+  int _sortMode = 0; // 0 默认 1 歌名 2 歌手 3 时长
 
   @override
   void initState() {
@@ -589,13 +602,14 @@ class _NeteasePlaylistDetailPageState
       _error = null;
     });
     try {
-      final songs =
-          await NeteaseUserService.instance.getPlaylistSongs(widget.playlist.id);
+      final songs = await NeteaseUserService.instance
+          .getPlaylistSongs(widget.playlist.id);
       if (!mounted) return;
       setState(() {
         _songs = songs;
         _loading = false;
       });
+      _applySort();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -603,6 +617,187 @@ class _NeteasePlaylistDetailPageState
         _loading = false;
       });
     }
+  }
+
+  void _applySort() {
+    final list = [..._songs];
+    if (_sortMode == 1) {
+      list.sort((a, b) => a.title.compareTo(b.title));
+    } else if (_sortMode == 2) {
+      list.sort((a, b) => a.artist.compareTo(b.artist));
+    } else if (_sortMode == 3) {
+      list.sort((a, b) => a.duration.compareTo(b.duration));
+    }
+    if (!mounted) return;
+    setState(() => _displaySongs = list);
+  }
+
+  void _cycleSort() {
+    setState(() => _sortMode = (_sortMode + 1) % 4);
+    _applySort();
+  }
+
+  String get _sortLabel {
+    switch (_sortMode) {
+      case 1:
+        return '按歌名';
+      case 2:
+        return '按歌手';
+      case 3:
+        return '按时长';
+      default:
+        return '默认排序';
+    }
+  }
+
+  Future<void> _playAt(int index) async {
+    if (_displaySongs.isEmpty) return;
+    final queue = [
+      ..._displaySongs.sublist(index),
+      ..._displaySongs.sublist(0, index),
+    ];
+    await ref.read(playbackControllerProvider.notifier).setQueue(queue);
+  }
+
+  Widget _actionButton(
+    ThemeColors colors,
+    IconData icon,
+    String label,
+    VoidCallback onTap,
+  ) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFFC62F2F),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: Colors.white),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _sortButton(ThemeColors colors) {
+    return GestureDetector(
+      onTap: _cycleSort,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: colors.surface,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.swap_vert, size: 14, color: colors.textSecondary),
+            const SizedBox(width: 4),
+            Text(
+              _sortLabel,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: colors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(ThemeColors colors) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 88,
+            height: 88,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              color: colors.surface,
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: widget.playlist.coverUrl.isNotEmpty
+                ? Image.network(
+                    widget.playlist.coverUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Icon(
+                      Icons.queue_music,
+                      size: 36,
+                      color: colors.textHint,
+                    ),
+                  )
+                : Icon(Icons.queue_music, size: 36, color: colors.textHint),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.playlist.name,
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                    color: colors.textPrimary,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '来自网易云音乐 · ${_songs.length}首歌曲',
+                  style: TextStyle(fontSize: 12, color: colors.textHint),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    _actionButton(
+                      colors,
+                      Icons.play_arrow,
+                      context.tr('播放全部'),
+                      () => _playAt(0),
+                    ),
+                    const SizedBox(width: 8),
+                    _actionButton(
+                      colors,
+                      Icons.shuffle,
+                      context.tr('随机播放'),
+                      () {
+                        final songs = [..._displaySongs]..shuffle();
+                        if (songs.isEmpty) return;
+                        ref
+                            .read(playbackControllerProvider.notifier)
+                            .setQueue(songs);
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    _sortButton(colors),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -617,24 +812,46 @@ class _NeteasePlaylistDetailPageState
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(child: Text(_error!))
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: Text(
+                          _error!,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: colors.textSecondary),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton(
+                        onPressed: _load,
+                        child: const Text('重试'),
+                      ),
+                    ],
+                  ),
+                )
               : _songs.isEmpty
                   ? const Center(child: Text('空歌单'))
-                  : ListView.builder(
-                      itemCount: _songs.length,
-                      itemBuilder: (ctx, i) {
-                        final s = _songs[i];
-                        return SongListItem(
-                          song: s,
-                          onTap: () {
-                            ref
-                                .read(playbackControllerProvider.notifier)
-                                .setQueue(
-                                  [..._songs.sublist(i), ..._songs.sublist(0, i)],
-                                );
-                          },
-                        );
-                      },
+                  : CustomScrollView(
+                      slivers: [
+                        SliverToBoxAdapter(
+                          child: _buildHeader(colors),
+                        ),
+                        SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (ctx, i) {
+                              final s = _displaySongs[i];
+                              return SongListItem(
+                                song: s,
+                                onTap: () => _playAt(i),
+                              );
+                            },
+                            childCount: _displaySongs.length,
+                          ),
+                        ),
+                      ],
                     ),
     );
   }
