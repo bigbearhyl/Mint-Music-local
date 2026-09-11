@@ -944,8 +944,12 @@ class _NeteasePlaylistDetailPageState
                   '来自网易云音乐 · ${_songs.length}首歌曲',
                   style: TextStyle(fontSize: 12, color: colors.textHint),
                 ),
-                const SizedBox(height: 10),
-                Row(
+                // 用 Wrap 代替 Row：左侧封面占位后剩余宽度有限，
+                // 三个胶囊按钮一行放不下会触发 RenderFlex overflow（黄黑斜纹溢出条），
+                // 换行显示更稳，窄屏也不会溢出。
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
                     _actionButton(
                       colors,
@@ -953,7 +957,6 @@ class _NeteasePlaylistDetailPageState
                       context.tr('播放全部'),
                       () => _playAt(0),
                     ),
-                    const SizedBox(width: 8),
                     _actionButton(
                       colors,
                       Icons.shuffle,
@@ -966,7 +969,6 @@ class _NeteasePlaylistDetailPageState
                             .setQueue(songs);
                       },
                     ),
-                    const SizedBox(width: 8),
                     _sortButton(colors),
                   ],
                 ),

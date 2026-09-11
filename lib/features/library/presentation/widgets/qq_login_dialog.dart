@@ -809,7 +809,10 @@ class _QqPlaylistDetailPageState extends ConsumerState<QqPlaylistDetailPage> {
                       style: TextStyle(fontSize: 12, color: colors.textHint),
                     ),
                     const SizedBox(height: 12),
-                    Row(
+                    // Wrap 代替 Row：窄屏时三个胶囊按钮会横向溢出（黄黑溢出条）
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
                       children: [
                         _actionButton(
                           colors,
@@ -817,7 +820,6 @@ class _QqPlaylistDetailPageState extends ConsumerState<QqPlaylistDetailPage> {
                           context.tr('播放全部'),
                           () => _playAt(0),
                         ),
-                        const SizedBox(width: 8),
                         _actionButton(
                           colors,
                           Icons.shuffle,
@@ -830,7 +832,6 @@ class _QqPlaylistDetailPageState extends ConsumerState<QqPlaylistDetailPage> {
                                 .setQueue(songs);
                           },
                         ),
-                        const SizedBox(width: 8),
                         _sortButton(colors),
                       ],
                     ),

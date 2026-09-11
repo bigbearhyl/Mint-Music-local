@@ -76,6 +76,10 @@ class MusicSourceManager {
     'QQ音乐': 'tx',
     '咪咕音乐': 'mg',
     '汽水VIP': 'qsvip',
+    // 别名：部分内部代码 / 插件会把网易云写成 'netease'，
+    // 归一化成内置源 key 'wy'，否则查不到内置源会掉到别的源（歌词/播放都会降级）。
+    'netease': 'wy',
+    'cloudmusic': 'wy',
   };
 
   bool _isValidAudioUrl(String url) {
@@ -1311,11 +1315,14 @@ class MusicSourceManager {
   }
 
   Future<String?> getLyric(Song song) async {
-    final sourceId = song.source;
-    if (sourceId == null) {
+    final rawSource = song.source;
+    if (rawSource == null) {
       print('[MusicSourceManager] getLyric: source is null');
       return null;
     }
+    // 归一化 source：部分歌单/插件会给出 'netease' 之类别名，
+    // 直接用别名查 _builtInSources 会查不到（歌词会降级失败）。
+    final sourceId = _canonicalSourceId(rawSource);
 
     print(
       '[MusicSourceManager] getLyric: source=$sourceId, songId=${song.id}, title=${song.title}',
@@ -1364,8 +1371,10 @@ class MusicSourceManager {
   }
 
   Future<LyricResult?> getLyricResult(Song song) async {
-    final sourceId = song.source;
-    if (sourceId == null) return null;
+    final rawSource = song.source;
+    if (rawSource == null) return null;
+    // 同上：归一化 source，避免别名导致取不到内置源歌词
+    final sourceId = _canonicalSourceId(rawSource);
 
     final builtIn = _builtInSources[sourceId];
     LyricResult? pluginFallback;

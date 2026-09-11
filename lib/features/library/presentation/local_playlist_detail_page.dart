@@ -342,7 +342,10 @@ class _LocalPlaylistDetailPageState
                           TextStyle(fontSize: 12, color: colors.textHint),
                     ),
                     const SizedBox(height: AppSpacing.md),
-                    Row(
+                    // Wrap 代替 Row：窄屏时按钮行会横向溢出（黄黑溢出条）
+                    Wrap(
+                      spacing: AppSpacing.sm,
+                      runSpacing: AppSpacing.sm,
                       children: [
                         _buildActionButton(
                             colors, Icons.play_arrow, context.tr('播放全部'), () {
@@ -352,7 +355,6 @@ class _LocalPlaylistDetailPageState
                             controller.setQueue(_sortedSongs);
                           }
                         }),
-                        const SizedBox(width: AppSpacing.sm),
                         _buildActionButton(colors, Icons.shuffle, context.tr('随机播放'),
                             () {
                           if (_sortedSongs.isNotEmpty) {
@@ -362,7 +364,6 @@ class _LocalPlaylistDetailPageState
                             controller.setQueue(songs);
                           }
                         }),
-                        const SizedBox(width: AppSpacing.sm),
                         _buildSortButton(colors),
                       ],
                     ),

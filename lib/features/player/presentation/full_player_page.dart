@@ -640,7 +640,7 @@ class _PlayerCoverPageState extends ConsumerState<_PlayerCoverPage>
     ref.watch(currentSongIdentityProvider);
     final song = ref.read(playbackControllerProvider).currentSong;
     final size =
-        (MediaQuery.of(context).size.width * 0.62).clamp(200.0, 300.0);
+        (MediaQuery.of(context).size.width * 0.62 * 1.2).clamp(240.0, 360.0);
 
     return Center(
       child: GestureDetector(

@@ -80,7 +80,7 @@ class NeteaseUserService {
     final songs = data['songs'];
     if (songs is! List) return const [];
     return songs
-        .map((s) => _songFromDetail(s as Map, source: 'netease'))
+        .map((s) => _songFromDetail(s as Map, source: 'wy'))
         .toList(growable: false);
   }
 
@@ -135,7 +135,7 @@ class NeteaseUserService {
     final tracks = pl['tracks'];
     if (tracks is! List) return const [];
     return tracks
-        .map((t) => _songFromDetail(t as Map, source: 'netease'))
+        .map((t) => _songFromDetail(t as Map, source: 'wy'))
         .toList(growable: false);
   }
 

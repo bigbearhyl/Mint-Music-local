@@ -220,9 +220,18 @@ class NeteaseMusicSource implements MusicSourceProvider {
         break;
     }
 
+    // 网易云要求声明 PC 客户端（os=pc; appver）；
+    // 缺失时部分 weapi/eapi 接口会返回 200 但 body 为空。
+    final headers = <String, String>{
+      ..._headersWithLogin,
+      'Cookie': loginCookie.isEmpty
+          ? 'os=pc; appver=3.1.17'
+          : '$loginCookie; os=pc; appver=3.1.17',
+    };
+
     final response = await _apiService.post(
       url,
-      headers: _headersWithLogin,
+      headers: headers,
       form: formData,
     );
 
@@ -643,6 +652,29 @@ class NeteaseMusicSource implements MusicSourceProvider {
 
   Future<dynamic> _requestLyricData(String cleanId) async {
     dynamic fallbackData;
+
+    // 0) weapi 直连（与歌单/搜索同一套链路，实测最稳）
+    try {
+      final w = await _directRequest(
+        _DirectApiConfig(_ApiType.weapi, '/weapi/song/lyric', {
+          'id': cleanId,
+          'lv': -1,
+          'kv': -1,
+          'tv': -1,
+        }),
+      );
+      if (w != null && w['code'] == 200) {
+        final lrc0 = _readLyricText(w, 'lrc');
+        final yrc0 = _readLyricText(w, 'yrc');
+        if ((lrc0 != null && lrc0.trim().isNotEmpty) ||
+            (yrc0 != null && yrc0.trim().isNotEmpty)) {
+          return w;
+        }
+        fallbackData ??= w;
+      }
+    } catch (e) {
+      print('[NeteaseLyric] weapi lyric failed: $e');
+    }
 
     // Try direct eapi first
     try {
