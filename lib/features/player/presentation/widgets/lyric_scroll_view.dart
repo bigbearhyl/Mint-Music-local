@@ -652,7 +652,7 @@ class _LyricLineWidget extends StatelessWidget {
                 fontSize: romanFontSize,
                 height: 1.3,
                 fontWeight: FontWeight.w400,
-                color: activeColor.withValues(alpha: isActive ? 0.5 : 0.3),
+                color: Colors.white.withValues(alpha: isActive ? 0.5 : 0.3),
               ),
             ),
           ),
@@ -701,7 +701,8 @@ class _LyricLineWidget extends StatelessWidget {
                 fontSize: transFontSize,
                 height: 1.35,
                 fontWeight: FontWeight.w500,
-                color: activeColor.withValues(alpha: 0.6),
+                // 翻译行固定白色（iMusic `.lline.on .ltrans` 同款），不跟随歌词高亮色
+                color: Colors.white.withValues(alpha: isActive ? 0.62 : 0.38),
               ),
             ),
             Padding(
@@ -714,7 +715,7 @@ class _LyricLineWidget extends StatelessWidget {
                   fontSize: transFontSize * 0.85,
                   height: 1.3,
                   fontWeight: FontWeight.w400,
-                  color: activeColor.withValues(alpha: isActive ? 0.5 : 0.25),
+                  color: Colors.white.withValues(alpha: isActive ? 0.5 : 0.25),
                 ),
               ),
             ),
@@ -732,7 +733,8 @@ class _LyricLineWidget extends StatelessWidget {
             fontSize: transFontSize,
             height: 1.35,
             fontWeight: FontWeight.w500,
-            color: activeColor.withValues(alpha: 0.6),
+            // 翻译行固定白色（iMusic `.lline.on .ltrans` 同款）
+            color: Colors.white.withValues(alpha: isActive ? 0.62 : 0.38),
           ),
         ),
       );
@@ -747,7 +749,7 @@ class _LyricLineWidget extends StatelessWidget {
             fontSize: transFontSize * 0.85,
             height: 1.3,
             fontWeight: FontWeight.w400,
-            color: activeColor.withValues(alpha: isActive ? 0.5 : 0.25),
+            color: Colors.white.withValues(alpha: isActive ? 0.5 : 0.25),
           ),
         ),
       );
