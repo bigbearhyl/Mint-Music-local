@@ -31,6 +31,9 @@ class AppColors {
 
   static const Color coverShadow = Color(0x40000000);
 
+  /// 歌词当前行高亮色（与逐字卡拉OK 扫色一致）
+  static const Color lyricHighlight = Color(0xFF31C27C);
+
   static const Color darkBackground = Color(0xFF121212);
   static const Color darkSurface = Color(0xFF282828);
   static const Color darkGlassBackground = Color(0xFF282828);

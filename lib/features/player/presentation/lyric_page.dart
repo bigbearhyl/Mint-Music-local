@@ -20,6 +20,7 @@ import 'widgets/amll_lyric_player.dart';
 import 'widgets/player_controls.dart';
 import '../../../shared/services/amll_toggle_service.dart';
 import '../../../shared/widgets/sleep_timer_picker.dart';
+import '../../../shared/widgets/song_action_sheet.dart';
 
 class LyricPage extends ConsumerStatefulWidget {
   const LyricPage({super.key});
@@ -30,7 +31,6 @@ class LyricPage extends ConsumerStatefulWidget {
 
 class _LyricPageState extends ConsumerState<LyricPage> {
   Color? _dominantColor;
-  Color? _lightColor;
   Song? _lastSong;
   bool _isLeaving = false;
   bool _exiting = false;
@@ -143,13 +143,8 @@ class _LyricPageState extends ConsumerState<LyricPage> {
       if (!mounted || _isLeaving) return;
       final dominant = paletteGenerator.dominantColor;
       if (dominant != null) {
-        final color = dominant.color;
-        final lightColor = color.computeLuminance() > 0.5
-            ? Color.lerp(Colors.white, color, 0.3)!
-            : Color.lerp(Colors.white, color, 0.15)!;
         setState(() {
-          _dominantColor = color;
-          _lightColor = lightColor;
+          _dominantColor = dominant.color;
         });
       }
     } catch (_) {
@@ -174,7 +169,6 @@ class _LyricPageState extends ConsumerState<LyricPage> {
     final enableBlur = ref.watch(lyricEnableBlurProvider);
     final enableScale = ref.watch(lyricEnableScaleProvider);
     final enableJumpLyric = ref.watch(appearanceJumpLyricProvider);
-    final immersiveColor = ref.watch(lyricImmersiveColorProvider);
     final fontSizeScale = ref.watch(lyricFontSizeProvider);
     if (song != null && !identical(song, _lastSong)) {
       _lastSong = song;
@@ -185,14 +179,15 @@ class _LyricPageState extends ConsumerState<LyricPage> {
       });
     }
 
-    final activeColor = immersiveColor && _lightColor != null
-        ? _lightColor!
-        : Colors.white;
-    final inactiveColor = Colors.white.withValues(alpha: 0.4);
+    // iMusic 同款：当前行未唱字为 42% 透明绿（.lline.on .w），已唱字全亮绿
+    const activeColor = Color(0x6B31C27C);
+    final inactiveColor = Colors.white.withValues(alpha: 0.42);
     final hasYrc = lyricState.hasYrc;
-    final baseFontSize = 35.0 * fontSizeScale;
-    final transFontSize = 18.0 * fontSizeScale;
-    final romanFontSize = 14.0 * fontSizeScale;
+    // 与播放页同屏歌词、平板歌词共用同一字号基准（对齐 iMusic 全屏歌词
+    // 15.5px 的做法：播放页与歌词模式是同一个容器、同一字号）。
+    final baseFontSize = 16.0 * fontSizeScale;
+    final transFontSize = 11.5 * fontSizeScale;
+    final romanFontSize = 10.0 * fontSizeScale;
     final watchFontFamily = ref.watch(lyricFontFamilyProvider);
     final watchFontRate = ref.watch(lyricFontRateProvider);
     final watchFontWeight = ref.watch(lyricFontWeightProvider);
@@ -651,6 +646,21 @@ class _LyricPageState extends ConsumerState<LyricPage> {
                 onTap: () {
                   Navigator.pop(ctx);
                   _shareSong(song);
+                },
+              ),
+              // iMusic 同款入口：歌词设置（字体/大小/字重、翻译、模糊、居中等）
+              ListTile(
+                leading: const Icon(
+                  Icons.lyrics_outlined,
+                  color: AppColors.textSecondary,
+                ),
+                title: Text(
+                  context.tr('歌词设置'),
+                  style: const TextStyle(color: AppColors.textPrimary),
+                ),
+                onTap: () {
+                  // 不 pop 当前菜单，直接叠加设置面板（与歌曲菜单行为一致）
+                  SongActionSheet.showLyricSettings(context);
                 },
               ),
               const SleepTimerMenuTile(),

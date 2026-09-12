@@ -6,6 +6,8 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../core/utils/responsive_layout.dart';
 import '../../../shared/widgets/music_cover_image.dart';
+import '../../../core/theme/app_colors.dart';
+import '../application/lyric_controller.dart';
 import '../application/playback_controller.dart';
 import '../domain/models/song.dart';
 
@@ -86,11 +88,12 @@ class MiniPlayer extends ConsumerWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 1),
-                    Text(
-                      song.artist,
-                      style: TextStyle(fontSize: subtitleFontSize, color: colors.textHint),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    // 播放中在歌手行位置滚动显示当前歌词（iMusic 迷你条同款：
+                    // 歌词自下滑入、歌手向上滑出；暂停/间奏无词时切回歌手名）
+                    _MiniSubLine(
+                      artist: song.artist,
+                      fontSize: subtitleFontSize,
+                      artistColor: colors.textHint,
                     ),
                   ],
                 ),
@@ -165,5 +168,103 @@ class MiniPlayer extends ConsumerWidget {
       );
     }
     return Icon(Icons.music_note, size: 20, color: colors.primary);
+  }
+}
+
+/// 迷你播放器第二行要显示的当前歌词（无歌词 / 尚未唱到首句时返回空串）。
+///
+/// 放在 Provider 里完成「position → 行文本」的换算：position 每 200ms 变化
+/// 都会重算，但返回 String —— 文本不变时下游 widget 不会重建。
+final _miniLyricLineProvider = Provider<String>((ref) {
+  final lines = ref.watch(lyricControllerProvider.select((s) => s.lines));
+  if (lines.isEmpty) return '';
+  final posMs = ref.watch(
+    playbackControllerProvider.select((s) => s.position.inMilliseconds),
+  );
+  final idx = lines.lastIndexWhere((l) => l.startTimeMs <= posMs);
+  if (idx < 0) return '';
+  return lines[idx].plainText.trim();
+});
+
+/// 迷你播放器副标题行：播放中显示当前歌词（绿色，iMusic 同款滑入动画），
+/// 暂停 / 间奏无词 / 加载中时显示歌手名。
+class _MiniSubLine extends ConsumerWidget {
+  const _MiniSubLine({
+    required this.artist,
+    required this.fontSize,
+    required this.artistColor,
+  });
+
+  final String artist;
+  final double fontSize;
+  final Color artistColor;
+
+  static const Duration _duration = Duration(milliseconds: 250);
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isPlaying = ref.watch(
+      playbackControllerProvider.select((s) => s.isPlaying),
+    );
+    final isLoading = ref.watch(
+      playbackControllerProvider.select((s) => s.isLoading),
+    );
+    final lyric = ref.watch(_miniLyricLineProvider);
+    final showLyric = isPlaying && !isLoading && lyric.isNotEmpty;
+
+    return ClipRect(
+      child: SizedBox(
+        height: fontSize * 1.6,
+        child: Stack(
+          alignment: Alignment.centerLeft,
+          children: [
+            _slide(
+              visible: !showLyric,
+              fromBelow: false,
+              child: Text(
+                artist,
+                style: TextStyle(fontSize: fontSize, color: artistColor),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            _slide(
+              visible: showLyric,
+              fromBelow: true,
+              child: Text(
+                lyric,
+                style: TextStyle(
+                  fontSize: fontSize,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.lyricHighlight,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _slide({
+    required bool visible,
+    required bool fromBelow,
+    required Widget child,
+  }) {
+    return SizedBox(
+      width: double.infinity,
+      child: AnimatedSlide(
+        duration: _duration,
+        curve: Curves.easeOut,
+        offset: visible ? Offset.zero : Offset(0, fromBelow ? 1 : -1),
+        child: AnimatedOpacity(
+          duration: _duration,
+          opacity: visible ? 1 : 0,
+          child: child,
+        ),
+      ),
+    );
   }
 }

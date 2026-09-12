@@ -89,7 +89,7 @@ class AmllLyricPlayerState extends State<AmllLyricPlayer>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:100%;height:100%;overflow:hidden;background:transparent}
-#player{width:100%;height:100%;visibility:hidden;--amll-lp-color:rgba(255,255,255,0.9);--amll-lp-font-size:calc(min(clamp(30px,2.5vw,50px),5vh));--amll-lp-hover-bg-color:rgba(255,255,255,0.08);--amll-lp-text-align:left;font-synthesis:weight style;text-align:var(--amll-lp-text-align)}
+#player{width:100%;height:100%;visibility:hidden;--amll-lp-color:#31C27C;--amll-lp-font-size:calc(min(clamp(30px,2.5vw,50px),5vh));--amll-lp-hover-bg-color:rgba(255,255,255,0.08);--amll-lp-text-align:left;font-synthesis:weight style;text-align:var(--amll-lp-text-align)}
 #amll-ff{font-synthesis:weight style}
 $css
 </style>

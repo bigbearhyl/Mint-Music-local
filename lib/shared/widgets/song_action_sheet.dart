@@ -99,6 +99,12 @@ class SongActionSheet extends ConsumerStatefulWidget {
     );
   }
 
+  /// 打开「歌词设置」面板（字体/大小/字重、翻译、罗马音、模糊、缩放、居中、AMLL）。
+  ///
+  /// 歌词页 “...” 菜单等可直接调用；歌曲菜单内部复用同一实现。
+  static void showLyricSettings(BuildContext context) =>
+      _SongActionSheetState.showLyricSettings(context);
+
   /// Shows a compact player menu with only 4 options:
   /// 添加到歌单, 下载, 分享, 倍速
   static Future<void> showPlayerMenu(
@@ -573,7 +579,7 @@ class _SongActionSheetState extends ConsumerState<SongActionSheet> {
         // 后续 _persist* 方法中任何基于 widget ref / context 的操作都会失效，
         // SharedPreferences 写入会静默失败。
         // 改为在当前 ActionSheet 之上再叠加一层歌词设置 BottomSheet。
-        _showLyricSettings();
+        SongActionSheet.showLyricSettings(context);
       },
       child: Padding(
         padding: const EdgeInsets.symmetric(
@@ -586,7 +592,7 @@ class _SongActionSheetState extends ConsumerState<SongActionSheet> {
             const SizedBox(width: AppSpacing.md),
             Text(
               context.tr('歌词设置'),
-              style: TextStyle(fontSize: 15, color: colors.textSecondary),
+              style: TextStyle(fontSize: 15, color: colors.textPrimary),
             ),
           ],
         ),
@@ -594,7 +600,10 @@ class _SongActionSheetState extends ConsumerState<SongActionSheet> {
     );
   }
 
-  void _showLyricSettings() {
+  /// 打开「歌词设置」面板（字体/大小/字重、翻译、罗马音、模糊、缩放、居中、AMLL）。
+  ///
+  /// 公开静态方法：除歌曲菜单外，歌词页 “...” 菜单等也可直接调用。
+  static void showLyricSettings(BuildContext context) {
     showModalBottomSheet(
       context: context,
       sheetAnimationStyle: _sheetAnimationStyle,
@@ -753,7 +762,7 @@ class _SongActionSheetState extends ConsumerState<SongActionSheet> {
     );
   }
 
-  Widget _lyricSettingRow(
+  static Widget _lyricSettingRow(
     BuildContext ctx,
     ProviderContainer container, {
     required IconData icon,
@@ -806,7 +815,7 @@ class _SongActionSheetState extends ConsumerState<SongActionSheet> {
     );
   }
 
-  Widget _lyricSettingSwitch(
+  static Widget _lyricSettingSwitch(
     BuildContext ctx,
     ProviderContainer container, {
     required IconData icon,
@@ -849,7 +858,7 @@ class _SongActionSheetState extends ConsumerState<SongActionSheet> {
     );
   }
 
-  Widget _buildAmllToggle(BuildContext ctx, ProviderContainer container) {
+  static Widget _buildAmllToggle(BuildContext ctx, ProviderContainer container) {
     return ListenableBuilder(
       listenable: AmllToggleService(),
       builder: (context, _) {
@@ -886,7 +895,7 @@ class _SongActionSheetState extends ConsumerState<SongActionSheet> {
     );
   }
 
-  void _persistSetting(
+  static void _persistSetting(
     ProviderContainer container,
     StateProvider<bool> provider,
     bool value,
@@ -895,7 +904,7 @@ class _SongActionSheetState extends ConsumerState<SongActionSheet> {
     unawaited(_doPersistSetting(container, provider, value));
   }
 
-  Future<void> _doPersistSetting(
+  static Future<void> _doPersistSetting(
     ProviderContainer container,
     StateProvider<bool> provider,
     bool value,
@@ -923,7 +932,7 @@ class _SongActionSheetState extends ConsumerState<SongActionSheet> {
     }
   }
 
-  void _showFontPicker(BuildContext ctx, ProviderContainer container) {
+  static void _showFontPicker(BuildContext ctx, ProviderContainer container) {
     const fontNameMap = {
       '': '系统默认',
       'lyricfont': '阿里巴巴圆润体',
@@ -1021,7 +1030,7 @@ class _SongActionSheetState extends ConsumerState<SongActionSheet> {
     );
   }
 
-  Widget _fontSettingRow(
+  static Widget _fontSettingRow(
     BuildContext ctx,
     ProviderContainer c,
     String title,
@@ -1062,7 +1071,7 @@ class _SongActionSheetState extends ConsumerState<SongActionSheet> {
     );
   }
 
-  Future<void> _showFontFamilyPicker(
+  static Future<void> _showFontFamilyPicker(
     BuildContext ctx,
     ProviderContainer container,
   ) {
@@ -1150,7 +1159,7 @@ class _SongActionSheetState extends ConsumerState<SongActionSheet> {
     );
   }
 
-  Future<void> _showFontRatePicker(
+  static Future<void> _showFontRatePicker(
     BuildContext ctx,
     ProviderContainer container,
   ) {
@@ -1206,10 +1215,11 @@ class _SongActionSheetState extends ConsumerState<SongActionSheet> {
                           ),
                           Expanded(
                             child: Slider(
-                              value: rate,
-                              min: 0.5,
-                              max: 2.0,
-                              divisions: 15,
+                              // 与 iMusic 歌词字号范围一致（0.7x ~ 2.25x）
+                              value: rate.clamp(0.7, 2.25),
+                              min: 0.7,
+                              max: 2.25,
+                              divisions: 31,
                               activeColor: AppColors.primary,
                               onChanged: (v) async {
                                 c2.read(lyricFontRateProvider.notifier).state =
@@ -1238,7 +1248,7 @@ class _SongActionSheetState extends ConsumerState<SongActionSheet> {
     );
   }
 
-  Future<void> _showFontWeightPicker(
+  static Future<void> _showFontWeightPicker(
     BuildContext ctx,
     ProviderContainer container,
   ) {
@@ -1324,7 +1334,7 @@ class _SongActionSheetState extends ConsumerState<SongActionSheet> {
     );
   }
 
-  Future<void> _persistStringSetting(
+  static Future<void> _persistStringSetting(
     ProviderContainer c,
     StateProvider<String> p,
     String v,
@@ -1340,7 +1350,7 @@ class _SongActionSheetState extends ConsumerState<SongActionSheet> {
     }
   }
 
-  Future<void> _persistDoubleSetting(
+  static Future<void> _persistDoubleSetting(
     ProviderContainer c,
     StateProvider<double> p,
     double v,
@@ -1356,7 +1366,7 @@ class _SongActionSheetState extends ConsumerState<SongActionSheet> {
     }
   }
 
-  Future<void> _persistIntSetting(
+  static Future<void> _persistIntSetting(
     ProviderContainer c,
     StateProvider<int> p,
     int v,

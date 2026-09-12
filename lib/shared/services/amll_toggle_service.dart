@@ -14,9 +14,12 @@ class AmllToggleService extends ChangeNotifier {
   factory AmllToggleService() => _instance;
   AmllToggleService._();
 
-  static const String _prefsKey = 'amll_lyric_enabled';
+  /// 2026-09-12：默认改用 Flutter 逐字歌词（未唱白 / 已唱绿）。
+  /// AMLL 是单色 + 遮罩透明度实现，做不到双色逐字，故默认关闭；
+  /// 键名升级为 v2，忽略旧版本默认写入的 true。
+  static const String _prefsKey = 'amll_lyric_enabled_v2';
 
-  bool _enabled = true;
+  bool _enabled = false;
   SharedPreferences? _prefs;
 
   /// 当前是否启用了 AMLL 歌词引擎
@@ -34,7 +37,7 @@ class AmllToggleService extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       _prefs = prefs;
-      _enabled = prefs.getBool(_prefsKey) ?? true;
+      _enabled = prefs.getBool(_prefsKey) ?? false;
       notifyListeners();
       debugPrint('[AmllToggle] loaded: $_enabled');
     } catch (e) {

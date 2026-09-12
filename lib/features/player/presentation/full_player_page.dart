@@ -1,9 +1,11 @@
+import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:on_audio_query/on_audio_query.dart';
+import '../../../core/constants/app_routes.dart';
 import '../../../core/l10n/l10n.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/responsive_layout.dart';
@@ -22,7 +24,6 @@ import 'widgets/lyric_scroll_view.dart';
 import 'widgets/amll_lyric_player.dart';
 import 'widgets/player_controls.dart';
 import '../platform/audio_effect_service.dart';
-import '../platform/audio_handler.dart';
 import '../platform/island_controller.dart';
 
 class FullPlayerPage extends ConsumerStatefulWidget {
@@ -33,10 +34,12 @@ class FullPlayerPage extends ConsumerStatefulWidget {
 }
 
 class _FullPlayerPageState extends ConsumerState<FullPlayerPage> {
-  final _pageController = PageController(initialPage: 0);
-  int _currentPage = 0;
   bool _lyricsRequested = false;
   bool _lyricsPageBuilt = false;
+
+  /// 歌词滚动组件的 GlobalKey（半屏歌词与沉浸歌词共用同一路由页，
+  /// 本页半屏直接内嵌 LyricScrollView，不再走 PageView）。
+  final GlobalKey _halfLyricKey = GlobalKey();
 
   /// Tablet landscape: when true, lyrics occupy the full area (cover hidden).
   bool _tabletLyricsFullMode = false;
@@ -92,9 +95,20 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage> {
     _ensureLyricsLoaded();
   }
 
+  /// 进入全屏播放页就加载歌词（同屏下半歌词需要立即可见）。
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _ensureLyricsLoaded();
+  }
+
+  /// 打开沉浸式全屏歌词（独立路由页，自带沉浸系统栏 + 右滑返回）。
+  void _openImmersiveLyrics() {
+    context.push(AppRoutes.lyric);
+  }
+
   @override
   void dispose() {
-    _pageController.dispose();
     super.dispose();
   }
 
@@ -162,55 +176,23 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage> {
                   return Column(
                     children: [
                       _PlayerHeader(
-                        currentPage: _currentPage,
+                        showingLyrics: false,
                         onBack: () => _beginExit(),
-                        onTogglePage: () {
-                          final next = _currentPage == 0 ? 1 : 0;
-                          if (next == 1) _activateLyricsPage();
-                          _pageController.jumpToPage(next);
-                        },
+                        onTogglePage: _openImmersiveLyrics,
                       ),
-                      Expanded(
-                        child: ListenableBuilder(
-                          listenable: AmllToggleService(),
-                          builder: (context, _) {
-                            final amllEnabled = AmllToggleService().enabled;
-                            return PageView.builder(
-                              controller: _pageController,
-                              physics: const NeverScrollableScrollPhysics(),
-                              itemCount: 2,
-                              onPageChanged: (index) {
-                                if (mounted) {
-                                  setState(() => _currentPage = index);
-                                }
-                                if (index == 1) _activateLyricsPage();
-                              },
-                              itemBuilder: (context, index) {
-                                if (index == 0) {
-                                  return _KeepAlivePage(
-                                    child: _PlayerCoverPage(
-                                      isPlaying: isPlaying,
-                                      onTapCover: () {
-                                        if (_currentPage == 0) {
-                                          _activateLyricsPage();
-                                          _pageController.jumpToPage(1);
-                                        }
-                                      },
-                                    ),
-                                  );
-                                }
-                                if (!_lyricsPageBuilt)
-                                  return const SizedBox.expand();
-                                return _KeepAlivePage(
-                                  child: _PlayerLyricsPage(
-                                    amllKey: _amllKey,
-                                    hideWebView: _isLeaving,
-                                  ),
-                                );
-                              },
-                            );
-                          },
+                      // 上半：旋转唱片 + 唱臂（点唱片 -> 沉浸式全屏歌词）。
+                      // 高度固定为唱片直径：区域小于唱片时唱片会向下溢出，
+                      // 导致下半歌词被"透过唱片"叠着显示。
+                      SizedBox(
+                        height: _PlayerCoverPage.discSize(context),
+                        child: _PlayerCoverPage(
+                          isPlaying: isPlaying,
+                          onTapCover: _openImmersiveLyrics,
                         ),
+                      ),
+                      // 下半：同屏歌词（纯 Flutter 滚动，非 AMLL WebView）
+                      Expanded(
+                        child: _HalfLyricPanel(key: _halfLyricKey),
                       ),
                       _PlayerSongInfo(),
                       _PlayerProgressBar(),
@@ -266,7 +248,7 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage> {
       children: [
         // Full-width header: back (left) — play mode (center) — toggle (right)
         _PlayerHeader(
-          currentPage: _tabletLyricsFullMode ? 1 : 0,
+          showingLyrics: _tabletLyricsFullMode,
           onBack: () => _beginExit(),
           onTogglePage: () {
             setState(() => _tabletLyricsFullMode = !_tabletLyricsFullMode);
@@ -529,11 +511,12 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage> {
 }
 
 class _PlayerHeader extends ConsumerWidget {
-  final int currentPage;
+  /// true = 当前主区是歌词（图标显示为封面），false = 唱片页（图标显示为歌词）
+  final bool showingLyrics;
   final VoidCallback onTogglePage;
   final VoidCallback onBack;
   const _PlayerHeader({
-    required this.currentPage,
+    required this.showingLyrics,
     required this.onTogglePage,
     required this.onBack,
   });
@@ -580,7 +563,7 @@ class _PlayerHeader extends ConsumerWidget {
           const Spacer(),
           IconButton(
             onPressed: onTogglePage,
-            icon: Icon(currentPage == 0 ? Icons.lyrics : Icons.album, size: 20),
+            icon: Icon(showingLyrics ? Icons.album : Icons.lyrics, size: 20),
             color: Colors.white.withValues(alpha: 0.6),
             style: IconButton.styleFrom(
               backgroundColor: Colors.white.withValues(alpha: 0.05),
@@ -602,6 +585,16 @@ class _PlayerCoverPage extends ConsumerStatefulWidget {
   /// 唱臂角度（SVG 同款）：暂停抬起 / 播放落碟
   static const _armRestDeg = 44.0;
   static const _armPlayDeg = 26.0;
+
+  /// 唱片直径（对齐 iMusic `.disc-wrap`：`min(74.4vw, 288px)`）。
+  ///
+  /// 再乘屏幕高度系数兜底：矮屏上自动缩小，保证唱片下方同屏歌词可见
+  /// （iMusic 播放页里唱片与歌词同屏，`#lyrics` 占 flex:1）。
+  static double discSize(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final iMusicSize = math.min(size.width * 0.744, 288.0);
+    return math.min(iMusicSize, size.height * 0.33);
+  }
 
   @override
   ConsumerState<_PlayerCoverPage> createState() => _PlayerCoverPageState();
@@ -639,8 +632,7 @@ class _PlayerCoverPageState extends ConsumerState<_PlayerCoverPage>
   Widget build(BuildContext context) {
     ref.watch(currentSongIdentityProvider);
     final song = ref.read(playbackControllerProvider).currentSong;
-    final size =
-        (MediaQuery.of(context).size.width * 0.62 * 1.2).clamp(240.0, 360.0);
+    final size = _PlayerCoverPage.discSize(context);
 
     return Center(
       child: GestureDetector(
@@ -948,24 +940,16 @@ class _PlayerLyricsPage extends ConsumerWidget {
     final enableBlur = ref.watch(lyricEnableBlurProvider);
     final enableScale = ref.watch(lyricEnableScaleProvider);
     final enableJumpLyric = ref.watch(appearanceJumpLyricProvider);
-    final immersiveColor = ref.watch(lyricImmersiveColorProvider);
     final fontSizeScale = ref.watch(lyricFontSizeProvider);
-    final coverColorAsync = ref.watch(currentCoverColorProvider);
-    final lightColor = coverColorAsync.whenOrNull(
-      data: (result) => result?.lightColor,
-    );
 
-    final Color activeColor;
-    if (immersiveColor && lightColor != null) {
-      activeColor = lightColor;
-    } else {
-      activeColor = Colors.white;
-    }
-    final inactiveColor = Colors.white.withValues(alpha: 0.4);
+    // iMusic 同款：当前行未唱字为 42% 透明绿（.lline.on .w），已唱字全亮绿
+    const activeColor = Color(0x6B31C27C);
+    final inactiveColor = Colors.white.withValues(alpha: 0.42);
     final hasYrc = lyricState.hasYrc;
-    final baseFontSize = 22.0 * fontSizeScale;
-    final transFontSize = 15.0 * fontSizeScale;
-    final romanFontSize = 13.0 * fontSizeScale;
+    // 与播放页同屏歌词、沉浸歌词页共用同一字号基准（iMusic 同款：15.5px 基准）
+    final baseFontSize = 16.0 * fontSizeScale;
+    final transFontSize = 11.5 * fontSizeScale;
+    final romanFontSize = 10.0 * fontSizeScale;
     final watchFontFamily = ref.watch(lyricFontFamilyProvider);
     final watchFontRate = ref.watch(lyricFontRateProvider);
     final watchFontWeight = ref.watch(lyricFontWeightProvider);
@@ -1085,6 +1069,118 @@ class _PlayerLyricsPage extends ConsumerWidget {
           ],
         );
       },
+    );
+  }
+}
+
+/// 半屏歌词面板（全屏播放页下半区）。
+///
+/// 与 `_PlayerLyricsPage` 不同：本面板固定使用纯 Flutter 的
+/// `LyricScrollView`（半屏尺寸下 AMLL WebView 合成开销不划算），
+/// 字体调小、保留行内高亮/翻译/罗马音与点行跳转；上下渐隐遮罩提示可滚动。
+/// 点按整面歌词区也会进入沉浸式全屏歌词。
+class _HalfLyricPanel extends ConsumerWidget {
+  const _HalfLyricPanel({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final lyricState = ref.watch(lyricControllerProvider);
+    final position = ref.watch(
+      playbackControllerProvider.select((s) => s.position),
+    );
+    final isPlaying = ref.watch(
+      playbackControllerProvider.select((s) => s.isPlaying),
+    );
+    final showTranslation = ref.watch(lyricShowTranslationProvider);
+    final showRoman = ref.watch(lyricShowRomanProvider);
+    final enableBlur = ref.watch(lyricEnableBlurProvider);
+    final enableScale = ref.watch(lyricEnableScaleProvider);
+    final enableJumpLyric = ref.watch(appearanceJumpLyricProvider);
+    final fontSizeScale = ref.watch(lyricFontSizeProvider);
+
+    // iMusic 同款：当前行未唱字为 42% 透明绿（.lline.on .w），已唱字全亮绿
+    const activeColor = Color(0x6B31C27C);
+    final inactiveColor = Colors.white.withValues(alpha: 0.42);
+    final hasYrc = lyricState.hasYrc;
+    // 与沉浸歌词页/平板共用同一基准（iMusic 同款 15.5px）
+    final baseFontSize = 16.0 * fontSizeScale;
+    final transFontSize = 11.5 * fontSizeScale;
+    final romanFontSize = 10.0 * fontSizeScale;
+    final fontFamily = ref.watch(lyricFontFamilyProvider);
+    final fontRate = ref.watch(lyricFontRateProvider);
+    final fontWeight = ref.watch(lyricFontWeightProvider);
+    final centerAlign = ref.watch(lyricCenterAlignProvider);
+
+    Widget child;
+    if (lyricState.isLoading && lyricState.lines.isEmpty) {
+      child = Center(
+        child: Text(
+          context.tr('加载歌词中...'),
+          style: TextStyle(
+            fontSize: 13,
+            color: inactiveColor,
+            letterSpacing: 2,
+          ),
+        ),
+      );
+    } else if (lyricState.error != null && lyricState.lines.isEmpty) {
+      child = Center(
+        child: Text(
+          lyricState.error!,
+          style: TextStyle(fontSize: 13, color: inactiveColor, letterSpacing: 2),
+        ),
+      );
+    } else if (lyricState.lines.isEmpty) {
+      child = Center(
+        child: Text(
+          context.tr('暂无歌词'),
+          style: TextStyle(fontSize: 13, color: inactiveColor, letterSpacing: 2),
+        ),
+      );
+    } else {
+      child = LyricScrollView(
+        lines: lyricState.lines,
+        currentTimeMs: position.inMilliseconds,
+        isPlaying: isPlaying,
+        hasYrc: hasYrc,
+        activeColor: activeColor,
+        inactiveColor: inactiveColor,
+        mainFontSize: baseFontSize,
+        transFontSize: transFontSize,
+        romanFontSize: romanFontSize,
+        fontSizeRate: fontRate,
+        showTranslation: showTranslation,
+        showRoman: showRoman,
+        enableBlur: enableBlur,
+        enableScale: enableScale,
+        enableJumpLyric: enableJumpLyric,
+        centerAlign: centerAlign,
+        fontFamily: fontFamily,
+        fontWeight: fontWeight,
+        onSeek: (startTimeMs) {
+          ref
+              .read(playbackControllerProvider.notifier)
+              .seek(Duration(milliseconds: startTimeMs));
+        },
+      );
+    }
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      // 半屏区上下渐隐，提示可滚动；点击空区也能进沉浸页
+      child: ShaderMask(
+        shaderCallback: (rect) => const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.transparent, Colors.white, Colors.white, Colors.transparent],
+          stops: [0.0, 0.08, 0.9, 1.0],
+        ).createShader(rect),
+        blendMode: BlendMode.dstIn,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: child,
+        ),
+      ),
     );
   }
 }
